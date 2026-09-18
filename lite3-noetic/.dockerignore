@@ -1,0 +1,13 @@
+.env
+.env.*
+**/.env
+**/.env.*
+**/__pycache__
+**/.pytest_cache
+**/.cache
+**/build
+**/devel
+**/log
+**/*.log
+**/transcripts
+**/model_cache

@@ -1,0 +1,13 @@
+.vscode/
+.agents/
+.codex/
+**/.env
+**/.env.*
+**/__pycache__/
+**/.pytest_cache/
+**/.cache/
+**/build/
+**/devel/
+**/log/
+**/*.pyc
+lite3-robot-docs/Lite3 print edition/绝影Lite3 三折页 英 印刷.pdf
