@@ -10,4 +10,4 @@ Markdown conversions are provided for searchability and agent use. The PDFs rema
 - [Jueying Lite3 LiDAR User Manual V1.0.6-0](<Lite 3 user manual/Jueying Lite3 LiDAR User Manual V1.0.6-0.md>) — [source PDF](<Lite 3 user manual/Jueying Lite3 LiDAR User Manual V1.0.6-0.pdf>)
 - [Jueying Lite3 Pro User Manual V1.0.7-0](<Lite 3 user manual/Jueying Lite3 Pro User Manual V1.0.7-0.md>) — [source PDF](<Lite 3 user manual/Jueying Lite3 Pro User Manual V1.0.7-0.pdf>)
 - [Jueying Lite3 Venture User Manual V1.0.6-0](<Lite 3 user manual/Jueying Lite3 Venture User Manual V1.0.6-0.md>) — [source PDF](<Lite 3 user manual/Jueying Lite3 Venture User Manual V1.0.6-0.pdf>)
-- [绝影Lite3 三折页 英 印刷](<Lite3 print edition/绝影Lite3 三折页 英 印刷.md>) — the 225 MB source PDF is an asset of the private `docs-2026-09` GitHub release; see the workspace README for the restore command.
+- [绝影Lite3 三折页 英 印刷](<Lite3 print edition/绝影Lite3 三折页 英 印刷.md>) — the 225 MB source PDF is an asset of the [private `docs-2026-09` release](https://github.com/dimitarbez/lite3-ros-sim/releases/tag/docs-2026-09); see the workspace README for the restore command.

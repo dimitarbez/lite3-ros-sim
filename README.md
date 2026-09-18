@@ -18,8 +18,8 @@ The large vendor brochure PDF is kept as an asset of the private `docs-2026-09` 
 
 ```bash
 gh release download docs-2026-09 -R dimitarbez/lite3-ros-sim \
-  --dir 'lite3-robot-docs/Lite3 print edition' \
-  --pattern '*.pdf'
+  --pattern 'Lite3-vendor-brochure.pdf' \
+  --output 'lite3-robot-docs/Lite3 print edition/绝影Lite3 三折页 英 印刷.pdf'
 ```
 
 The other manuals and their searchable Markdown copies are under [lite3-robot-docs](lite3-robot-docs/README.md). The PDFs remain the reference for figures, tables, and safety details.
