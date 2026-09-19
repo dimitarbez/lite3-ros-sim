@@ -1,0 +1,22 @@
+<launch>
+  <arg name="transmit_enabled" default="false"/>
+  <arg name="takeover_transition_commissioned" default="false"/>
+  <arg name="auto_enable" default="false"/>
+  <arg name="hold_only" default="true"/>
+  <arg name="commissioning_scale" default="0.1"/>
+
+  <node pkg="emotion_bot_lite3_hw" type="planted_joint_controller.py"
+        name="planted_joint_controller" ns="emotion_bot/hardware"
+        output="screen" required="true">
+    <param name="auto_enable" value="$(arg auto_enable)"/>
+    <param name="hold_only" value="$(arg hold_only)"/>
+    <param name="commissioning_scale" value="$(arg commissioning_scale)"/>
+  </node>
+
+  <node pkg="emotion_bot_lite3_hw" type="motion_sdk_bridge"
+        name="motion_sdk_bridge" ns="emotion_bot/hardware/direct_joint"
+        output="screen" required="true">
+    <param name="transmit_enabled" value="$(arg transmit_enabled)"/>
+    <param name="takeover_transition_commissioned" value="$(arg takeover_transition_commissioned)"/>
+  </node>
+</launch>

@@ -1,5 +1,68 @@
 # Troubleshooting
 
+## Hardware service refuses to arm
+
+This is the expected result from the checked-in hardware configuration. Inspect `/emotion_bot/hardware/status`; posture requires a fresh AI link, fresh `0x0901` and reviewed high-rate telemetry, stable state `6`, zero Retroid axes, healthy joints/IMU, explicit transmission enablement, and nonzero measured axis commissioning. Dynamic actions additionally require the exact Deeprcs `2.0.153` layout, reviewed trajectories, and a recorded STOP-preemption pass. Do not bypass a false gate.
+
+Robot credentials must not be copied into this repository, shell history, an
+environment file, or a command line. The manufacturer-supplied default for the
+perception host is recorded in section 2.2.1 of the local
+`Jueying Lite3 Perception Development Manual(beta) V2.1.1-0`; consult that
+authoritative document and enter it only at an interactive `sudo` prompt. The
+installed core and passive telemetry units use `Restart=always`, so an
+unexpected clean process exit recovers without needing the credential; an
+explicit `systemctl stop` remains stopped as expected.
+
+## Hardware emotion link is stale
+
+Verify that the one-time installer completed. The normal target checks both
+perception services before opening the tunnel:
+
+```bash
+make -C lite3-noetic setup-emotion-hardware
+make -C lite3-noetic run-emotion-hardware
+```
+
+The forward and both endpoints use loopback port `8767`. A new brain launch
+creates a new random session. Replayed or decreasing sequences within one
+session are discarded. If setup cannot authenticate, install the local public
+key on both robot hosts; do not put the password in `.env`, a command line, or
+Git.
+
+If STOP/Retroid health remains stale, inspect
+`emotion-bot-stop-observer@ysc.service` on `192.168.2.1` and
+`emotion-bot-hardware-core@ysc.service` on `192.168.1.103`. The observer belongs
+on the motion host because that is where `p2p0` exists. Never move it to the
+perception host or grant raw-socket capability to the complete ROS graph.
+
+## Telemetry tap has no packets
+
+Do not change the robot's `network.toml` ad hoc. Confirm the perception host owns the documented `192.168.1.103:43897` destination, the passive tap is bound to the correct interface, and only that tap has `CAP_NET_RAW`. A packet size, offset, unit, finite-value, or range mismatch permanently disables direct-joint compatibility for the session; restart only after investigating the mismatch.
+
+## Height packets arrive but the body does not move
+
+The earlier `/simple_cmd` trials reached the perception-host wire but did not
+move the body. The first measured motion appeared only when a direct diagnostic
+matched the captured Retroid exchange exactly: four 2 Hz heartbeats, Move, a
+2.0-second wait, Pose, a 1.5-second wait, then 50 Hz pairs consisting of
+`0x21010135` value `32768` immediately followed by `0x21010102` height.
+
+Check packet order, source endpoint, mode waits, pairing, and cadence before
+changing amplitude. The proven source/target pair was
+`192.168.2.28:43897 -> 192.168.2.1:43893`. A Retroid reference capture contained
+387 packets over 19 seconds; its height samples ranged from `-29332` to `267`,
+and the companion yaw field was mainly `32768`. That capture describes the app,
+not safe custom bounds: do not replay its full height range.
+
+Value `32768` is outside the manual's documented signed yaw range. Preserve it
+only as opaque Retroid-compatible framing for the tested firmware; do not treat
+it as a yaw request. The maintained host bridge uses this sequence; the
+separate persistent ROS posture sender remains fail-closed. Finish with five
+yaw-`0` then height-`0` pairs at 20 ms spacing and confirm fresh state `6` with
+zero errors. If only the Move-to-Pose transition is visible, verify that the
+periodic range crosses the deployed height deadband; the commissioned neutral
+range is `0..-10000`, not the earlier ineffective `+10000..-3900` probe.
+
 ## Missing emotion-bot checkout
 
 `make start` requires `/home/dimitarbez/Dev/ROS/emotion-bot/.git`. For a new clean setup:

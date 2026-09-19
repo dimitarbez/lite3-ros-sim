@@ -1,0 +1,27 @@
+[Unit]
+Description=EmotionBot Lite3 passive telemetry tap
+After=network-online.target transfer.service
+Wants=network-online.target
+Requires=transfer.service
+
+[Service]
+Type=simple
+User=%i
+Environment=ROBOT_HOME=/home/%i
+Environment=ROS_MASTER_URI=http://127.0.0.1:11311
+Environment=ROS_HOSTNAME=127.0.0.1
+ExecStartPre=/usr/local/libexec/emotion-bot/wait-for-transfer
+ExecStart=/usr/local/libexec/emotion-bot/run-perception-telemetry
+Restart=always
+RestartSec=2
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/%i/.ros /dev/shm
+RestrictAddressFamilies=AF_UNIX AF_INET AF_PACKET AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

@@ -4,9 +4,19 @@
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
+import sys
 
 
 MAX_REQUEST_BYTES = 128 * 1024
+
+
+def log_request_error(exc):
+    """Log bounded diagnostics without ever printing the API key."""
+    message = "%s: %s" % (type(exc).__name__, exc)
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    if api_key:
+        message = message.replace(api_key, "[redacted]")
+    print("OpenAI bridge request failed: " + message[:1000], file=sys.stderr, flush=True)
 
 
 def build_instructions(emotion):
@@ -128,7 +138,8 @@ class Handler(BaseHTTPRequestHandler):
                     close()
         except (BrokenPipeError, ConnectionResetError):
             return
-        except Exception:
+        except Exception as exc:
+            log_request_error(exc)
             try:
                 if streaming_started:
                     self.wfile.write(b'{"type":"error","message":"request failed"}\n')

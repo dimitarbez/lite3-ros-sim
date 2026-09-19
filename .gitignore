@@ -6,8 +6,12 @@
 **/__pycache__/
 **/.pytest_cache/
 **/.cache/
+**/.catkin_workspace
 **/build/
 **/devel/
+**/install/
 **/log/
+**/Testing/
 **/*.pyc
+lite3-noetic/hardware-ws/src/CMakeLists.txt
 lite3-robot-docs/Lite3 print edition/绝影Lite3 三折页 英 印刷.pdf

@@ -1,0 +1,5 @@
+<launch>
+  <arg name="config" default="$(find emotion_bot_lite3_hw)/config/default.yaml"/>
+  <rosparam command="load" file="$(arg config)" ns="emotion_bot/hardware"/>
+  <node pkg="emotion_bot_lite3_hw" type="telemetry_tap.py" name="telemetry_tap" ns="emotion_bot/hardware" output="screen" required="true"/>
+</launch>

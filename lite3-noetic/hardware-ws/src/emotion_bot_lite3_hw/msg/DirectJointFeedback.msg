@@ -1,0 +1,12 @@
+std_msgs/Header header
+uint64 receive_monotonic_ns
+uint32 sdk_tick
+string[12] name
+float64[12] position
+float64[12] velocity
+float64[12] effort
+float64[12] temperature
+float64[9] imu
+float64[12] contact_force
+bool contact_feedback_available
+bool all_contacts_healthy

@@ -1,0 +1,9 @@
+<launch>
+  <arg name="config" default="$(find emotion_bot_lite3_hw)/config/default.yaml"/>
+  <include file="$(find emotion_bot_lite3_hw)/launch/hardware_core.launch">
+    <arg name="config" value="$(arg config)"/>
+  </include>
+  <include file="$(find emotion_bot_lite3_hw)/launch/hardware_telemetry.launch">
+    <arg name="config" value="$(arg config)"/>
+  </include>
+</launch>

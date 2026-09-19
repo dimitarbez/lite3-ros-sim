@@ -1,0 +1,125 @@
+network:
+  telemetry_interface: eth0
+  motion_host_ip: 192.168.1.120
+  telemetry_port: 43897
+  telemetry_target_ip: 192.168.1.103
+  retroid_interface: p2p0
+  retroid_ip: 192.168.2.196
+  motion_host_wifi_ip: 192.168.2.1
+  command_port: 43893
+  emotion_bind_host: 127.0.0.1
+  emotion_port: 8767
+  stop_relay_bind_ip: 192.168.1.103
+  stop_relay_port: 43910
+  stop_relay_source_port: 43911
+  stop_relay_key_file: /etc/emotion-bot/stop-relay.key
+
+safety:
+  transmit_enabled: false
+  dynamic_actions_enabled: false
+  emotion_timeout: 0.75
+  telemetry_timeout: 0.25
+  vendor_feedback_timeout: 0.1
+  retroid_timeout: 0.75
+  stop_hold: 2.0
+  stable_stand_time: 2.0
+  maximum_abs_roll_deg: 10.0
+  maximum_abs_pitch_deg: 10.0
+  maximum_joint_temperature_c: 70.0
+  sdk_timeout_seconds: 1.0
+  ownership_marker: /dev/shm/emotion_bot_lite3_sdk_ownership
+  required_deeprcs_version: "2.0.153"
+  # Byte-for-byte checked on 2026-09-20 against deployed Deeprcs 2.0.153 and
+  # official Lite3_MotionSDK RobotData. Direct positions matched /joint_states
+  # with the documented sign inversion. This firmware reports every contact
+  # and joint-temperature slot as zero, so neither is treated as a sensor gate.
+  sdk_layout:
+    id: "deeprcs-2.0.153-reviewed-0906-v1"
+    deeprcs_version: "2.0.153"
+    body_size: 368
+    tick_offset: 0
+    joint_offset: 44
+    imu_offset: 8
+    contact_offset: 240
+    # Four standing vertical channels were stable between -3.51 and -4.60
+    # over 4 s; all were exactly zero while sitting. Negative is planted.
+    contact_feedback_available: true
+    contact_z_sign: -1
+    contact_minimum_z: 1.0
+  stop_preemption_verified: false
+
+direct_joint:
+  # The persistent robot services never start a sender. The explicit hardware
+  # launcher supplies a temporary true private parameter after commissioning.
+  transmit_enabled: false
+  # Live 2026-09-19 testing showed that ControlGet(SDK) is not a seamless
+  # takeover from the vendor standing controller. Keep this false until a
+  # vendor-supported zero-to-stand transition is implemented and measured.
+  takeover_transition_commissioned: false
+  minimum_battery: 25.0
+  command_rate: 100.0
+  feedback_publish_rate: 100.0
+  sender_rate: 1000.0
+  command_timeout: 0.05
+  feedback_timeout: 0.05
+  stable_gate_time: 2.0
+  neutral_return_time: 1.5
+  neutral_hold_time: 0.35
+  maximum_anchor_delta: 0.08
+  maximum_velocity: 0.20
+  maximum_acceleration: 0.80
+  maximum_joint_error: 0.08
+  kp: 30.0
+  kd: 0.7
+  # Persistent services cannot substitute operator observation for sensing.
+  # A temporary commissioning config must set both values deliberately.
+  require_contact_feedback: true
+  operator_planted_confirmed: false
+  ownership_lock: /dev/shm/emotion_bot_lite3_direct_joint.lock
+  ownership_marker: /dev/shm/emotion_bot_lite3_direct_joint.owned
+
+posture:
+  heartbeat_rate: 4.0
+  command_rate: 20.0
+  # A lost mapper must converge immediately to exact neutral even while the
+  # upstream AI heartbeat remains fresh.
+  intent_timeout: 0.25
+  pose_mode_code: 0x21010D05
+  heartbeat_code: 0x21040001
+  # Disabled by default. Physical use requires a temporary, explicitly reviewed
+  # height-only commissioning configuration and all normal posture gates.
+  neutral_breathing:
+    enabled: false
+    publish_rate: 20.0
+    entrance_duration: 0.25
+    idle_period: 1.375
+    entrance_height: 1.0
+    idle_high_height: 0.65
+    idle_low_height: -0.39
+  axes:
+    height: {code: 0x21010102, protocol_limit: 20000, commissioned_limit: 0, max_rate: 0}
+    roll: {code: 0x21010131, protocol_limit: 12553, commissioned_limit: 0, max_rate: 0}
+    pitch: {code: 0x21010130, protocol_limit: 6553, commissioned_limit: 0, max_rate: 0}
+    yaw: {code: 0x21010135, protocol_limit: 9553, commissioned_limit: 0, max_rate: 0}
+  profiles:
+    neutral:   {height: 0.00, roll: 0.00, pitch: 0.00, yaw: 0.00}
+    joy:       {height: 0.00, roll: 0.00, pitch: 0.00, yaw: 0.00}
+    sadness:   {height: 0.00, roll: 0.00, pitch: 0.00, yaw: 0.00}
+    anger:     {height: 0.00, roll: 0.00, pitch: 0.00, yaw: 0.00}
+    fear:      {height: 0.00, roll: 0.00, pitch: 0.00, yaw: 0.00}
+    surprise:  {height: 0.00, roll: 0.00, pitch: 0.00, yaw: 0.00}
+    disgust:   {height: 0.00, roll: 0.00, pitch: 0.00, yaw: 0.00}
+    curiosity: {height: 0.00, roll: 0.00, pitch: 0.00, yaw: 0.00}
+    affection: {height: 0.00, roll: 0.00, pitch: 0.00, yaw: 0.00}
+
+actions:
+  joy: hop
+  surprise: hop
+  anger: stomp
+  hop_cooldown: 15.0
+  stomp_cooldown: 10.0
+  sender_rate: 1000.0
+  # Trajectory values remain absent until progressive commissioning.
+  hop_trajectory: []
+  stomp_left_trajectory: []
+  stomp_right_trajectory: []

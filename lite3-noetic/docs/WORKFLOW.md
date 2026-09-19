@@ -46,6 +46,64 @@ make -C lite3-noetic run-emotion-sim-headless
 
 The simulator consumes `sensor_msgs/Joy`; it does not instantiate its `/cmd_vel` receiver. Its sole input is remapped to `/emotion_bot/joy_out`, where manual and emotional commands have already passed arbitration and safety.
 
+## Split-host hardware graph
+
+Hardware is a different graph, workspace, configuration, and operator workflow. It never starts from `run-emotion-sim*`. With the robot sitting, install the fail-closed services once:
+
+```bash
+make -C lite3-noetic setup-emotion-hardware
+```
+
+Normal use is then two terminals:
+
+```bash
+make -C lite3-noetic run-emotion-hardware
+make -C lite3-noetic run-emotion-chat
+```
+
+The hardware target checks the installed robot services and fail-closed flags,
+opens the loopback-only SSH tunnel through `192.168.2.1`, starts the ephemeral
+OpenAI sidecar, and launches the brain. The uplink revalidates emotion-state 1.1
+and sends transport-schema 1.0 NDJSON at 5 Hz with a random session ID and
+increasing sequence. The receiver binds only to loopback, rejects frames over 2
+KiB and replays, and measures freshness with the perception host's monotonic
+clock. Ctrl-C removes the tunnel and sidecar.
+
+Robot-side nodes live in the separate `hardware-ws` catkin workspace. The
+perception telemetry service and ROS-less motion-host STOP observer receive only
+`CAP_NET_RAW`; all other nodes remain unprivileged. The authenticated relay
+crosses the internal network without sending to the robot command port. The
+supervisor is the only arming authority and has mutually exclusive `DISARMED`,
+`POSTURE_ARMED`, `ACTION_PENDING`, `SDK_TAKEOVER`, `ACTION_ACTIVE`, `RECOVERY`,
+and `FAULT` states. See `hardware-ws/README.md` before any deployment.
+
+The repository defaults deliberately cannot move hardware: transmission and dynamic actions are false, commissioned limits/rates and posture amplitudes are zero, the exact `0x0906` layout is unset, STOP preemption is unverified, and trajectories are empty. Do not turn those fields into guessed values.
+
+### Default neutral hardware sequence
+
+The first measured height motion on 2026-09-19 used a direct diagnostic that
+reproduced the full Lite3 app's captured protocol. The maintained
+`run-emotion-hardware` target now starts the same neutral-only host bridge by
+default. Its exact session order is four heartbeats at
+2 Hz, Move, a 2.0-second wait, Pose, and a 1.5-second wait. Each 50 Hz height
+sample was then preceded immediately by command `0x21010135` with the captured
+Retroid companion value `32768`. Shutdown sent five yaw-`0`/height-`0` pairs at
+20 ms spacing.
+
+The bridge uses source port `43897`, target `192.168.2.1:43893`, a height
+envelope of `0` to `-10000`, `4000 units/s` maximum rate, a 4-second entrance,
+and a 10-second period. Before transmission it requires `DISARMED`,
+stable basic state `6`, zero errors, fresh telemetry/joints/IMU/AI link, fresh
+centered Retroid input, STOP false, and 12 finite joint values. The operator had
+the Retroid STOP ready in a clear, level area. Dynamic actions, locomotion,
+direct joints, and torque output remained out of scope.
+
+The operator authorized a 25% minimum battery; that is the explicit runtime
+floor and output pauses below it. It does not replace the Pro manual's 75% start
+recommendation. The checked-in robot-side transmission flags remain false: the
+launcher-owned bridge is exclusive, neutral-only, freshness-gated, and guarded
+by a 250 ms relay watchdog plus the five-pair exact-zero fallback.
+
 ## Conversation and turn ordering
 
 Start the terminal client in another terminal:

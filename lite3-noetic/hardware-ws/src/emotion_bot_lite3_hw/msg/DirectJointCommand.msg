@@ -1,0 +1,10 @@
+std_msgs/Header header
+uint64 generation
+string emotion
+bool enable
+bool release
+float64[12] position
+float64[12] velocity
+float64[12] acceleration
+float64[12] kp
+float64[12] kd

@@ -1,0 +1,13 @@
+std_msgs/Header header
+uint32 packet_sequence
+uint32 robot_basic_state
+uint32 robot_gait_state
+uint32 robot_motion_state
+float64 battery_level
+uint32 error_flags
+bool zero_position_flag
+float64 roll_deg
+float64 pitch_deg
+float64 yaw_deg
+bool sdk_layout_compatible
+bool high_rate_healthy
