@@ -1,62 +1,65 @@
-# Lite3 emotion robot project guide
+# Lite3 emotion robot workspace guide
 
-## Mission
+## Mission and boundary
 
-Build and verify a simulation-first ROS 1 system in which the DEEP Robotics Lite3 runs in Gazebo and the `emotion-bot` emotional state can be consumed by ROS nodes and expressed through safe, bounded robot behavior.
+Build and verify a simulation-first ROS 1 system in which the DEEP Robotics Lite3 runs in Gazebo and EmotionBot state is expressed through bounded robot behavior.
 
-The immediate target is simulation. Do not operate a physical robot, send UDP packets to a motion host, run `example_lite3_real`, change a robot's ROS version, or enable real-world auto mode unless the user explicitly asks for hardware work.
+Simulation is the normal development target. The workspace includes a dated hardware research record, but that record is not standing permission to operate a physical robot. Do not connect to a robot, capture its traffic, send motion-host UDP packets, run `example_lite3_real`, alter robot configuration, or enable real-world auto mode unless the user explicitly asks for that hardware action in the current task.
 
 ## Repository map
 
-- `lite3-noetic/` is the maintained Ubuntu 20.04, ROS Noetic, and Gazebo Docker wrapper. Run its workflow through its `Makefile`.
-- `lite3-noetic/ws/Lite3_VMC/` is the active catkin workspace and the place where simulator integration code is built. Its `src/CMakeLists.txt` intentionally points to the Noetic catkin toplevel file.
-- `lite3_vmc_upstream/` is a clean reference checkout of `DeepRoboticsLab/Lite3_VMC`. Do not develop in it or copy the Melodic catkin symlink back into the Noetic workspace.
-- `lite3-robot-docs/` contains manufacturer PDFs and searchable sibling Markdown conversions. Start with `lite3-robot-docs/README.md`.
-- `emotion-bot/` is the preferred location for a checkout of <https://github.com/dimitarbez/emotion-bot>. It is not currently vendored. Record the commit used when adding it; do not silently update or copy its source into another package.
-- Ignore generated catkin output under `build/`, `devel/`, and `log/` unless diagnosing a build. Do not hand-edit generated files.
+- This repository is the private `lite3-ros-sim` wrapper and pins three Git submodules. Commit source changes in the owning submodule first, then update the wrapper gitlink deliberately.
+- `lite3-noetic/` is the maintained Ubuntu 20.04, ROS Noetic, and Gazebo Docker wrapper. Use its `Makefile`; keep ROS 1 off the host.
+- `lite3-noetic/ws/Lite3_VMC/` is the maintained Lite3 fork and active catkin workspace. Its `src/CMakeLists.txt` intentionally targets the Noetic catkin toplevel. Simulator and `emotion_bot_ros` development happens here.
+- `emotion-bot/` is the pinned EmotionBot checkout. Its supported integration API is the reusable, headless `emotional_core.engine.EmotionEngine`; do not drive the interactive CLI through stdin.
+- `lite3_vmc_upstream/` is a pinned, clean reference checkout of `DeepRoboticsLab/Lite3_VMC`. Never develop in it, add files to it, or copy its Melodic catkin symlink into the active Noetic workspace.
+- `lite3-robot-docs/` contains manufacturer PDFs and searchable Markdown conversions. Start with its `README.md`; the PDFs remain authoritative for figures, tables, and safety-critical details.
+- Ignore generated catkin output under `build/`, `devel/`, and `log/` unless diagnosing a build. Never hand-edit generated files.
 
 ## Sources of truth
 
-Use the following order when facts conflict:
+Use this order when facts conflict:
 
-1. The checked-out code and launch/config files that are actually being built.
-2. `lite3-noetic/README.md`, `lite3-noetic/docs/WORKFLOW.md`, and `lite3-noetic/docs/TROUBLESHOOTING.md` for this repository's wrapper workflow.
-3. The Markdown files under `lite3-robot-docs/` for search and the matching PDFs for diagrams, tables, coordinate directions, limits, and safety-critical details.
-4. Upstream Lite3 and emotion-bot repositories for behavior not represented locally.
+1. Checked-out code, launch/config files, tests, and superproject gitlinks actually in use.
+2. `lite3-noetic/README.md`, `lite3-noetic/docs/USAGE.md`, `lite3-noetic/docs/WORKFLOW.md`, `lite3-noetic/docs/TROUBLESHOOTING.md`, and `lite3-noetic/ws/Lite3_VMC/src/emotion_bot_ros/README.md` for the implemented simulator workflow.
+3. `lite3-noetic/docs/VERIFICATION.md` for dated verification results. It is historical evidence, not proof that an edited checkout still passes.
+4. `lite3-noetic/docs/HARDWARE_APP_CONTROL.md` for the dated app-protocol investigation and bounded Stand/Sit experiment. It is evidence and design input, not a general hardware runbook.
+5. Searchable manufacturer Markdown and the matching PDFs under `lite3-robot-docs/`.
+6. Upstream Lite3 and EmotionBot documentation only for behavior not represented locally.
 
-Markdown files under `lite3-robot-docs/` are automated text extractions. Preserve the PDFs and consult them before making claims based on a figure or a visually structured table.
+Do not bake a remembered submodule SHA into new guidance. Read the current wrapper gitlink and nested repository status. When documenting dated results, state the commit and date actually tested.
 
-## Current behavior and known gaps
+## Current behavior
 
-- The supported host workflow is WSL2/Ubuntu 24.04 with a Docker container based on Ubuntu 20.04 and ROS Noetic. Keep ROS 1 off the host.
-- Normal simulator startup uses four interactive terminals: Gazebo, model/controller spawning, the Lite3 simulation controller, and keyboard control.
-- `make run-spawn` must remain attached to a real terminal. The upstream spawn node waits for Enter to start controllers and another Enter to stop and remove them; EOF can cause immediate cleanup.
-- Simulation joint state is `/lite3_gazebo/joint_states`. The physical robot documentation describes `/joint_states`, `/imu/data`, `/leg_odom`, and `/cmd_vel`; do not assume those real-robot names exist unchanged in Gazebo.
-- Keyboard control publishes `sensor_msgs/Joy` on `/joy`.
-- The source contains a `/cmd_vel` receiver, and `lite3_sim/main.yaml` contains `speed_update_mode`, but the current simulation executable does not instantiate that receiver and `qrRobotRunner` reads `speed_update_mode` without applying it. Treat `/cmd_vel` control in simulation as unimplemented until a test proves otherwise.
-- The manufacturer perception manual describes `/cmd_vel` as `geometry_msgs/Twist`: positive `linear.x` is forward, positive `linear.y` is left, and positive `angular.z` turns left. It describes the ROS-to-motion-host bridge as `message_transformer`; that bridge is for hardware and is not the Gazebo controller.
-- The motion-host manual specifies a UDP heartbeat of at least 2 Hz and a software emergency-stop command. These are hardware protocol requirements, not simulation APIs.
-- The current emotion-bot entry point is an interactive CLI with a matplotlib plot and an OpenAI-key check. Integrate its reusable emotional-core objects; do not automate the CLI through stdin.
-- Emotion-bot tracks valence, arousal, and one of nine discrete emotions. Its full pinned Python dependency set is substantially newer than ROS Noetic's Python 3.8 base, so validate interpreter and wheel compatibility before installing it in the ROS image. Prefer a separate runtime/bridge if the dependencies cannot coexist cleanly.
+- The supported host workflow is WSL2/Ubuntu 24.04 with Docker running Ubuntu 20.04, ROS Noetic, and Gazebo.
+- Normal integrated targets start Gazebo, the model, all controllers, the Lite3 runner, chat, EmotionBot, the expression mapper, and the safety bridge. The four-terminal upstream flow is retained for baseline isolation.
+- `make run-spawn` must remain attached to a real terminal. The upstream node uses one Enter to start controllers and a second Enter to stop/remove them; EOF can cause immediate cleanup.
+- Simulation joint state is `/lite3_gazebo/joint_states`. Physical-robot topic names in vendor documents must not be assumed to exist in Gazebo.
+- The upstream keyboard publishes `sensor_msgs/Joy` on `/joy`. The integrated controller's sole input is remapped to `/emotion_bot/joy_out` after manual/emotion arbitration and safety checks.
+- The source contains a `/cmd_vel` receiver, but the current simulation executable does not instantiate it and does not apply `speed_update_mode`. Treat `/cmd_vel` control in simulation as unimplemented until a test proves otherwise.
+- EmotionBot tracks valence in `[-1, 1]`, arousal in `[0, 1]`, and one of nine discrete emotions. `EmotionEngine` is headless and deterministic by default; the legacy `main.py` CLI still owns plotting and optional direct response generation.
+- Do not install EmotionBot's full pinned dependency set into the ROS Noetic image. The ROS adapter imports the compatible headless core; live OpenAI replies run in the separate Python 3.12 sidecar.
+- Normal chat expression profiles are planted: x/y/yaw stay zero. Joy/surprise hops and anger stomps are bounded simulator-controller actions, not hardware commands or external Gazebo wrenches.
 
-## Target integration shape
+## Implemented integration boundary
 
-Keep emotional reasoning separate from robot actuation:
+Keep emotional reasoning separate from actuation:
 
-1. An emotion adapter owns the emotion-bot state and accepts text/events.
-2. It publishes a stable ROS-facing state contract containing at least emotion name, valence, arousal, and timestamp.
-3. A separate expression mapper converts that state into configurable robot behavior.
-4. A safety layer clamps commands, expires stale commands to zero, and can disable all motion while leaving emotional state reporting active.
+1. `EmotionEngine` owns appraisal, personality, memory, valence, arousal, and categorical emotion.
+2. `emotion_bot_ros` adapts conversation events and publishes a versioned ROS-facing state contract.
+3. The expression mapper converts state to declarative, rate-limited posture/action intentions.
+4. The safety bridge clamps, arbitrates, expires stale sources to zero, gates readiness/health/stance, and publishes the sole simulator Joy input.
+5. The Lite3 controller executes only the bounded command it receives after those gates.
 
-Prefer a small catkin package such as `emotion_bot_ros` under `lite3-noetic/ws/Lite3_VMC/src/` for ROS adapters and launch files. Keep domain logic in the emotion-bot checkout rather than duplicating it in callbacks. Use ROS parameters/YAML for emotion-to-motion mappings, limits, timeouts, and enable flags.
+Keep domain logic in `emotion-bot`, ROS contracts/orchestration in `emotion_bot_ros`, and controller mechanics in `quadruped`. `lite3-noetic/ws/Lite3_VMC/src/emotion_bot_ros/config/default.yaml` is the source of truth for topic names, mappings, limits, timeouts, and enable flags.
 
-Start with a transport contract that is easy to inspect from the terminal. A JSON payload on `std_msgs/String` is acceptable for the first vertical slice; introduce custom messages only when typed consumers justify them. Namespace new topics under `/emotion_bot/...` and avoid changing upstream topic names without a compatibility reason.
+The current state/conversation/action contracts use inspectable JSON on `std_msgs/String`; motion intentions use `geometry_msgs/Twist`, and controller transport uses `sensor_msgs/Joy`. Preserve schema versions, turn correlation, generation ordering, message types, and the `/emotion_bot/...` namespace unless a coordinated migration is requested.
 
-Do not let the emotion engine publish motor, joint-effort, UDP, or unbounded velocity commands directly. An emotion such as anger or surprise must never bypass the same limits and stop behavior used for every other state. For integrated Gazebo and emotion-chat workflows, emotional motion must always be enabled once simulator readiness, health, and stance preparation pass; default commanded velocity remains zero. Never hand a live Gazebo/chat session back to the user with `motion_enabled: false`. If a transient watchdog event disables motion, wait for `health_ok: true` and `stance_prepared: true`, explicitly re-enable `/emotion_bot/set_motion_enabled`, and verify `motion_enabled: true` before handoff. This simulation-only rule does not authorize physical-robot, UDP, or motion-host actuation.
+No emotional state may publish motor, joint-effort, UDP, or unbounded velocity commands directly. Anger, surprise, and other actions pass through the same limits, watchdogs, cancellation, and stop behavior as every other state.
 
 ## Development workflow
 
-Run wrapper commands from the repository root with `make -C lite3-noetic <target>`, or enter `lite3-noetic/` first.
+Run wrapper commands from the workspace root with `make -C lite3-noetic <target>`.
 
 Initial setup:
 
@@ -66,7 +69,18 @@ make -C lite3-noetic start
 make -C lite3-noetic bootstrap
 ```
 
-Baseline simulation, in four terminals:
+Inspect the wrapper and all nested repository statuses before `bootstrap`. It preserves dirty or detached active workspaces; a clean attached Lite3 branch may be fetched and fast-forwarded.
+
+Integrated simulation and chat, in two terminals:
+
+```bash
+make -C lite3-noetic run-emotion-sim-openai  # or run-emotion-sim offline
+make -C lite3-noetic run-emotion-chat
+```
+
+Gate interactive handoff on `/emotion_bot/status`: `sim_ready`, `health_ok`, `stance_prepared`, and `motion_enabled` must all be true. If a watchdog disables motion, wait for health and stance recovery, call `/emotion_bot/set_motion_enabled` with true, and verify status again. Default commanded velocity remains zero; enabled means bounded expressions are permitted.
+
+Upstream baseline simulation, in four attached terminals:
 
 ```bash
 make -C lite3-noetic run-gazebo
@@ -75,63 +89,53 @@ make -C lite3-noetic run-sim
 make -C lite3-noetic run-keyboard
 ```
 
-Press Enter in the spawn terminal once to load/start controllers. Do not send the second Enter until the test is over.
-
-Inspect the graph from another terminal:
-
-```bash
-make -C lite3-noetic topics
-make -C lite3-noetic joint-states
-make -C lite3-noetic rqt-graph
-```
-
-After source changes, build in the container rather than on the Noble host:
+After source changes, build in the container:
 
 ```bash
 docker exec lite3-noetic-dev bash -lc \
   'cd /workspaces/lite3-noetic/ws/Lite3_VMC && source /opt/ros/noetic/setup.bash && catkin_make -DCMAKE_BUILD_TYPE=Release'
 ```
 
-Source `/opt/ros/noetic/setup.bash` and `devel/setup.bash` in every raw `docker exec` command that invokes ROS packages. Keep C++ changes compatible with the package's existing C++14 setting and Python ROS nodes compatible with the interpreter that actually runs them.
+Source `/opt/ros/noetic/setup.bash` and `devel/setup.bash` in raw commands that invoke built ROS packages. Keep C++ compatible with the existing C++14 setting and ROS Python compatible with the interpreter that actually runs it.
 
 ## Change discipline
 
-- Establish that the unmodified simulator starts before debugging the emotion integration.
-- Make focused changes in the active Noetic workspace. Keep unrelated upstream changes out of the patch.
-- Do not run `git pull` in either Lite3 checkout when local changes exist. `make bootstrap` performs a fast-forward pull, so inspect status first.
-- Preserve topic message types and coordinate semantics. Document every new topic, parameter, node, and launch file.
-- Never commit API keys, `.env` files, model caches, tokens, generated plots, or large downloaded model artifacts.
-- Avoid loading transformer models during ROS package import. Use lazy initialization so launch, topic inspection, and unit tests remain fast and deterministic.
-- Mock OpenAI/network calls in tests. Unit tests must not require a secret, paid API call, GUI, microphone, physical robot, or internet connection.
-- Preserve emotion-bot's GPL-3.0 notices and check redistribution implications before vendoring or copying its code.
+- Inspect all four Git repositories independently. A clean wrapper status does not prove its submodules are clean. Never silently advance a submodule or wrapper gitlink.
+- Make focused changes in the active Noetic fork and EmotionBot checkout. Keep `lite3_vmc_upstream` clean.
+- Do not pull over local changes. `make bootstrap` may fast-forward a clean attached active checkout, so inspect status first.
+- Preserve topic types and coordinate semantics. Document every new topic, parameter, node, launch file, Make target, and operator-visible recovery path.
+- Keep English `emotion-bot/README.md` and Macedonian `emotion-bot/README.mkd` aligned when changing shared user-facing behavior.
+- Never commit API keys, `.env`, credentials, model caches, tokens, packet captures, generated plots, build output, or large downloaded artifacts.
+- Avoid model loading during ROS package import. Mock network/OpenAI calls; ordinary tests must not require a secret, paid call, GUI, microphone, physical robot, or internet.
+- Preserve EmotionBot's GPL-3.0 notices and review redistribution implications before copying or vendoring its code.
 
-## Verification expectations
+## Verification
 
-Match verification effort to the change, and report commands plus outcomes.
+Match checks to the change and report commands plus outcomes.
 
-For documentation or shell-wrapper changes:
+For documentation or wrapper changes:
 
 ```bash
 make -C lite3-noetic help
 bash -n lite3-noetic/scripts/*.sh lite3-noetic/docker/*.sh
 ```
 
-For catkin code, require a clean `catkin_make` in the container. For emotion logic, run the relevant emotion-bot pytest suite in its compatible environment. The upstream repository's `requirements.txt` does not currently declare pytest, so provision it as a development dependency rather than adding it to production runtime implicitly.
+For the integrated offline gate:
 
-For ROS integration, verify at minimum:
+```bash
+make -C lite3-noetic verify-emotion
+```
 
-- the adapter launches without a GUI or API key when using a deterministic test backend;
-- a known input produces the expected emotion-state message;
-- valence stays in `[-1, 1]` and arousal in `[0, 1]`;
-- integrated Gazebo/chat launch enables emotional motion after readiness, health, and stance gates pass;
-- Gazebo emotional motion remains enabled throughout interactive verification, and any transient watchdog disable is recovered and re-enabled before handoff;
-- enabled Gazebo expression output produces only bounded commands;
-- stale input, node shutdown, or adapter failure produces a zero/neutral command;
-- existing keyboard control and `/lite3_gazebo/joint_states` still work;
-- no command is sent to real-hardware UDP endpoints.
+For catkin code, require a clean Release `catkin_make` in the container. For EmotionBot logic, use `requirements-dev.txt` or the wrapper's `emotion-unit-tests`; do not make pytest a production runtime dependency.
 
-The simulation milestone is complete only when one documented launch sequence brings up Gazebo, the Lite3 controller, the emotion adapter, and the expression mapper; a scripted input changes the published emotion; Gazebo visibly reflects the configured expression; and shutdown leaves the robot stationary without controller errors.
+ROS integration checks must cover deterministic adapter launch without a key/GUI, state bounds and turn correlation, enabled bounded output, exact-zero stale/disable/shutdown behavior, existing keyboard and joint-state behavior, and the no-hardware boundary. A live visual claim additionally requires a close Gazebo camera plus state, action, Joy, pose, and contact telemetry.
+
+The simulation milestone is complete only when one documented launch sequence brings up Gazebo, the controller, adapter, mapper, and safety bridge; scripted input changes emotion; Gazebo visibly reflects it; motion remains enabled after all gates pass; and shutdown leaves the robot stationary without controller errors.
 
 ## Hardware boundary
 
-Hardware deployment is a separate milestone requiring explicit user direction and a fresh safety review against the Motion Development, Motion Host Communication Interface, Perception Development, and model-specific user manuals. Before any real command, confirm model, firmware, ROS version, network target, emergency-stop path, clear operating area, command timeout, and a human operator ready to intervene.
+Hardware deployment requires explicit current-task direction and a fresh review of `lite3-noetic/docs/HARDWARE_APP_CONTROL.md`, the Motion Development manual, Motion Host Communication Interface, Perception Development manual, and the exact model's user manual. The 2026-09-19 record proves only the conditions and bounded Stand/Sit test described there; do not generalize it to walking, pose expression, concurrent controllers, STOP recovery, or direct joint/torque control.
+
+The tested full Lite3 Android app is a high-level, non-ROS motion-host controller. It is not the generic DEEP Robotics gamepad-forwarding app, and neither app supplies this workspace's Gazebo `/joy` or `/cmd_vel` path. Do not reuse the generic gamepad packet format for the motion host or assume status telemetry replies to the command sender; follow the inspected hardware note and do not reconfigure the deployed telemetry target ad hoc.
+
+Before any real command, confirm robot model and deployed software, fresh current state, network target, heartbeat ownership, emergency-stop/manual-takeover path, clear area, watchdog/timeout behavior, and a human operator ready to intervene. The Stand/Sit command is a toggle: precede it with fresh state telemetry, send it exactly once from an expected stable state, and never retry blindly. Software STOP is an emergency action, not ordinary timeout recovery.

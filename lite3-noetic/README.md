@@ -99,4 +99,4 @@ Press Enter once in `run-spawn` to start controllers and keep it attached. Do no
 
 The wrapper mounts `lite3-noetic/` read-write at `/workspaces/lite3-noetic` and `emotion-bot/` read-only at `/workspaces/emotion-bot`. If an existing container has stale mounts, run `make -C lite3-noetic restart`.
 
-See [usage](docs/USAGE.md), [the workflow](docs/WORKFLOW.md), [troubleshooting](docs/TROUBLESHOOTING.md), [verification record](docs/VERIFICATION.md), and [package reference](ws/Lite3_VMC/src/emotion_bot_ros/README.md).
+See [usage](docs/USAGE.md), [the workflow](docs/WORKFLOW.md), [troubleshooting](docs/TROUBLESHOOTING.md), [verification record](docs/VERIFICATION.md), [hardware app-control research](docs/HARDWARE_APP_CONTROL.md), and [package reference](ws/Lite3_VMC/src/emotion_bot_ros/README.md).

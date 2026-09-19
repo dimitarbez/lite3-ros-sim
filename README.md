@@ -12,7 +12,7 @@ make -C lite3-noetic start
 make -C lite3-noetic bootstrap
 ```
 
-See [the wrapper guide](lite3-noetic/README.md) for launch and test commands. `lite3_vmc_upstream` is a clean reference checkout. Development happens in `lite3-noetic/ws/Lite3_VMC` and `emotion-bot`.
+See [the wrapper guide](lite3-noetic/README.md) for launch and test commands. The separate [hardware app-control research note](lite3-noetic/docs/HARDWARE_APP_CONTROL.md) records the inspected Lite3 app protocol without enabling hardware control. `lite3_vmc_upstream` is a clean reference checkout. Development happens in `lite3-noetic/ws/Lite3_VMC` and `emotion-bot`.
 
 The large vendor brochure PDF is kept as an asset of the private `docs-2026-09` release because it exceeds GitHub's ordinary Git file limit. Restore it when needed with:
 
