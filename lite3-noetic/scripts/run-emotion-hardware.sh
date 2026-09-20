@@ -19,6 +19,12 @@ ANGER_SUITE_TEST="${HARDWARE_ANGER_SUITE_TEST:-false}"
 ANGER_SUITE_CYCLES="${HARDWARE_ANGER_SUITE_CYCLES:-1}"
 ANGER_FIRST_PAW="${HARDWARE_ANGER_FIRST_PAW:-left}"
 ANGER_LIFT_METERS="${HARDWARE_ANGER_LIFT_METERS:-0.035}"
+SADNESS_SINGLE_HOVER_TEST="${HARDWARE_SADNESS_SINGLE_HOVER_TEST:-false}"
+SADNESS_SUITE_TEST="${HARDWARE_SADNESS_SUITE_TEST:-false}"
+SADNESS_BODY_VISUAL_TEST="${HARDWARE_SADNESS_BODY_VISUAL_TEST:-false}"
+SADNESS_BODY_VISUAL_CYCLES="${HARDWARE_SADNESS_BODY_VISUAL_CYCLES:-1}"
+SADNESS_FIRST_PAW="${HARDWARE_SADNESS_FIRST_PAW:-left}"
+SADNESS_LIFT_METERS="${HARDWARE_SADNESS_LIFT_METERS:-0.020}"
 FEAR_BODY_VISUAL_TEST="${HARDWARE_FEAR_BODY_VISUAL_TEST:-false}"
 FEAR_SINGLE_HOVER_TEST="${HARDWARE_FEAR_SINGLE_HOVER_TEST:-false}"
 FEAR_SUITE_TEST="${HARDWARE_FEAR_SUITE_TEST:-false}"
@@ -83,6 +89,40 @@ esac
 case "${ANGER_LIFT_METERS}" in
   ''|*[!0-9.]*) echo "HARDWARE_ANGER_LIFT_METERS must be numeric." >&2; exit 2 ;;
 esac
+case "${SADNESS_SINGLE_HOVER_TEST}" in
+  true) SADNESS_SINGLE_HOVER_TEST_ARGUMENT="--sadness-single-hover-test" ;;
+  false) SADNESS_SINGLE_HOVER_TEST_ARGUMENT="" ;;
+  *) echo "HARDWARE_SADNESS_SINGLE_HOVER_TEST must be true or false." >&2; exit 2 ;;
+esac
+case "${SADNESS_BODY_VISUAL_TEST}" in
+  true) SADNESS_BODY_VISUAL_TEST_ARGUMENT="--sadness-body-visual-test" ;;
+  false) SADNESS_BODY_VISUAL_TEST_ARGUMENT="" ;;
+  *) echo "HARDWARE_SADNESS_BODY_VISUAL_TEST must be true or false." >&2; exit 2 ;;
+esac
+case "${SADNESS_BODY_VISUAL_CYCLES}" in
+  ''|*[!0-9]*) echo "HARDWARE_SADNESS_BODY_VISUAL_CYCLES must be an integer." >&2; exit 2 ;;
+esac
+if ((SADNESS_BODY_VISUAL_CYCLES < 1 || SADNESS_BODY_VISUAL_CYCLES > 2)); then
+  echo "HARDWARE_SADNESS_BODY_VISUAL_CYCLES must be in [1, 2]." >&2
+  exit 2
+fi
+if [[ "${SADNESS_BODY_VISUAL_TEST}" != true &&
+      "${SADNESS_BODY_VISUAL_CYCLES}" != 1 ]]; then
+  echo "HARDWARE_SADNESS_BODY_VISUAL_CYCLES above 1 requires HARDWARE_SADNESS_BODY_VISUAL_TEST=true." >&2
+  exit 2
+fi
+case "${SADNESS_SUITE_TEST}" in
+  true) SADNESS_SUITE_TEST_ARGUMENT="--sadness-suite-test" ;;
+  false) SADNESS_SUITE_TEST_ARGUMENT="" ;;
+  *) echo "HARDWARE_SADNESS_SUITE_TEST must be true or false." >&2; exit 2 ;;
+esac
+case "${SADNESS_FIRST_PAW}" in
+  left|right) ;;
+  *) echo "HARDWARE_SADNESS_FIRST_PAW must be left or right." >&2; exit 2 ;;
+esac
+case "${SADNESS_LIFT_METERS}" in
+  ''|*[!0-9.]*) echo "HARDWARE_SADNESS_LIFT_METERS must be numeric." >&2; exit 2 ;;
+esac
 case "${FEAR_BODY_VISUAL_TEST}" in
   true) FEAR_BODY_VISUAL_TEST_ARGUMENT="--fear-body-visual-test" ;;
   false) FEAR_BODY_VISUAL_TEST_ARGUMENT="" ;;
@@ -112,12 +152,17 @@ fi
 if [[ "${ANGER_SINGLE_STOMP_TEST}" == true || "${ANGER_SUITE_TEST}" == true ]]; then
   ((COMMISSIONING_MODES += 1))
 fi
+if [[ "${SADNESS_BODY_VISUAL_TEST}" == true ||
+      "${SADNESS_SINGLE_HOVER_TEST}" == true ||
+      "${SADNESS_SUITE_TEST}" == true ]]; then
+  ((COMMISSIONING_MODES += 1))
+fi
 if [[ "${FEAR_BODY_VISUAL_TEST}" == true ||
       "${FEAR_SINGLE_HOVER_TEST}" == true || "${FEAR_SUITE_TEST}" == true ]]; then
   ((COMMISSIONING_MODES += 1))
 fi
 if ((COMMISSIONING_MODES > 1)); then
-  echo "Joy, anger, and fear commissioning modes are mutually exclusive." >&2
+  echo "Joy, anger, sadness, and fear commissioning modes are mutually exclusive." >&2
   exit 2
 fi
 
@@ -186,7 +231,7 @@ BRAIN_PID=$!
 
 echo "Starting the continuous official MotionSDK expression owner (allowlist: ${COMMISSIONED_EMOTIONS}, scale: ${PROFILE_SCALE})."
 ssh "${SSH_OPTIONS[@]}" -J "${MOTION_SSH}" "${PERCEPTION_SSH}" \
-  "set -e; umask 077; echo \$\$ >'${REMOTE_RUNNER_PID_FILE}'; exec ~/emotion_bot_lite3_hw_ws/bin/motion_sdk_expression_runner --execute --continuous --commissioned-emotions='${COMMISSIONED_EMOTIONS}' --profile-scale='${PROFILE_SCALE}' --minimum-battery='${MINIMUM_BATTERY}' --pid-file='${REMOTE_RUNNER_PID_FILE}' ${JOY_PAW_TEST_ARGUMENT} ${JOY_SUITE_TEST_ARGUMENT} --paw-lift-meters='${PAW_LIFT_METERS}' ${ANGER_SINGLE_STOMP_TEST_ARGUMENT} ${ANGER_SUITE_TEST_ARGUMENT} --anger-suite-cycles='${ANGER_SUITE_CYCLES}' --anger-first-paw='${ANGER_FIRST_PAW}' --anger-lift-meters='${ANGER_LIFT_METERS}' ${FEAR_BODY_VISUAL_TEST_ARGUMENT} ${FEAR_SINGLE_HOVER_TEST_ARGUMENT} ${FEAR_SUITE_TEST_ARGUMENT} --fear-first-paw='${FEAR_FIRST_PAW}' --fear-lift-meters='${FEAR_LIFT_METERS}'" &
+  "set -e; umask 077; echo \$\$ >'${REMOTE_RUNNER_PID_FILE}'; exec ~/emotion_bot_lite3_hw_ws/bin/motion_sdk_expression_runner --execute --continuous --commissioned-emotions='${COMMISSIONED_EMOTIONS}' --profile-scale='${PROFILE_SCALE}' --minimum-battery='${MINIMUM_BATTERY}' --pid-file='${REMOTE_RUNNER_PID_FILE}' ${JOY_PAW_TEST_ARGUMENT} ${JOY_SUITE_TEST_ARGUMENT} --paw-lift-meters='${PAW_LIFT_METERS}' ${ANGER_SINGLE_STOMP_TEST_ARGUMENT} ${ANGER_SUITE_TEST_ARGUMENT} --anger-suite-cycles='${ANGER_SUITE_CYCLES}' --anger-first-paw='${ANGER_FIRST_PAW}' --anger-lift-meters='${ANGER_LIFT_METERS}' ${SADNESS_BODY_VISUAL_TEST_ARGUMENT} --sadness-body-visual-cycles='${SADNESS_BODY_VISUAL_CYCLES}' ${SADNESS_SINGLE_HOVER_TEST_ARGUMENT} ${SADNESS_SUITE_TEST_ARGUMENT} --sadness-first-paw='${SADNESS_FIRST_PAW}' --sadness-lift-meters='${SADNESS_LIFT_METERS}' ${FEAR_BODY_VISUAL_TEST_ARGUMENT} ${FEAR_SINGLE_HOVER_TEST_ARGUMENT} ${FEAR_SUITE_TEST_ARGUMENT} --fear-first-paw='${FEAR_FIRST_PAW}' --fear-lift-meters='${FEAR_LIFT_METERS}'" &
 EXPRESSION_PID=$!
 
 set +e

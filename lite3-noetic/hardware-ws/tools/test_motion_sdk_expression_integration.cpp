@@ -6,6 +6,7 @@
 #include "motion_sdk_anger_stomp.hpp"
 #include "motion_sdk_expression_profile.hpp"
 #include "motion_sdk_fear_guard.hpp"
+#include "motion_sdk_sadness.hpp"
 #include "motion_sdk_shared_state.hpp"
 
 struct FakeSender {
@@ -98,6 +99,31 @@ int main() {
       fear_retarget.arousal(), 20.0);
   assert(fear_engine.active() == "surprise");
   assert(fear_engine.pending().empty());
+
+  // Sadness also owns a lifted paw. Same-category updates wait for the next
+  // loop, while a different category is handed back only after the runner's
+  // placement, 1.5 s exact-neutral return, and 0.35 s hold contract.
+  ExpressionEngine sadness_engine({"neutral", "sadness", "curiosity"});
+  sadness_engine.Request("sadness", -0.8, 0.3, 0.0);
+  sadness_engine.Sample(
+      ExpressionEngine::kNeutralReturnSeconds +
+      ExpressionEngine::kNeutralHoldSeconds + 0.001);
+  assert(sadness_engine.active() == "sadness");
+  SadnessRetargetTracker sadness_retarget(300);
+  SadnessHoverGate sadness_landing_gate;
+  assert(sadness_landing_gate.BeginHover());
+  sadness_retarget.Observe(true, true, 301, "sadness", -0.9, 0.2);
+  assert(sadness_retarget.may_start_next_hover());
+  sadness_retarget.Observe(true, true, 302, "curiosity", 0.2, 0.5);
+  assert(!sadness_retarget.may_start_next_hover());
+  sadness_landing_gate.CompleteLanding(
+      true, true, kSadnessLandingDwellSeconds);
+  assert(sadness_landing_gate.next_hover_allowed());
+  sadness_engine.CompleteExternalNeutralTransition(
+      sadness_retarget.emotion(), sadness_retarget.valence(),
+      sadness_retarget.arousal(), 30.0);
+  assert(sadness_engine.active() == "curiosity");
+  assert(sadness_engine.pending().empty());
 
   // The official owner is the only fake sender instantiated in this harness;
   // Retroid and legacy action senders have no execution path here.

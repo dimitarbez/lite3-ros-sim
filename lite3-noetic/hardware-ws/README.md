@@ -266,6 +266,69 @@ The normal allowlist remains `neutral`. Do not add `anger` to
 `HARDWARE_COMMISSIONED_EMOTIONS` until a separately authorized live chat
 selection and mid-motion retarget test succeeds.
 
+The Sadness candidate is likewise isolated from the normal allowlist.
+`HARDWARE_SADNESS_BODY_VISUAL_TEST=true` runs a separate all-feet-planted
+7.8-second head-down animation after the five-second Neutral window. The
+accepted revision lowers only the front corners by 48 mm over 1.50 seconds,
+settles, performs three 14 mm crying heaves with alternating 4 mm side tilt,
+holds the deep bow, and recovers exactly over 1.50 seconds. Rear corners remain
+at neutral and every corner stays within the 50 mm Cartesian workspace. Set
+`HARDWARE_SADNESS_BODY_VISUAL_CYCLES=2` for the bounded 15.6-second repeat;
+only `1..2` is accepted. It does not bypass or weaken the paw contact gates.
+`HARDWARE_SADNESS_SINGLE_HOVER_TEST=true` runs the five-second accepted Neutral
+window followed by one complete six-second lowered-paw loop.
+`HARDWARE_SADNESS_SUITE_TEST=true` runs two complete loops, alternating front
+paws; `HARDWARE_SADNESS_FIRST_PAW=left|right` controls the order, and
+`HARDWARE_SADNESS_LIFT_METERS` is restricted to `0.015..0.025`.
+
+Each loop uses a 20 mm common crouch, 5 mm front droop, 2 mm support-side roll
+bias, 4 mm widened stance, and a default 20 mm hover. Its fixed phases are
+1.20-second sink, 1.00-second withdrawal, 0.80-second lift, 1.00-second pause,
+0.55-second gentle lower, 0.25-second landing dwell, and 1.20-second exact
+recovery. Lowering removes the x/y support transfer before the landing gate;
+recovery then removes every remaining Cartesian offset and requires four
+supports. A new category cannot abandon a lifted paw and uses the global
+1.5-second canonical return plus 0.35-second exact-neutral hold. A request
+arriving during normal recovery causes a fresh complete neutral transition
+rather than shortening it.
+
+The complete local hardware gate and all nine clean aarch64 suites pass. The
+current installed runner SHA-256 is
+`7c2980b02b432a62d18c546853574a36efb4f0b4add91536836f4f0fdb4e648a`.
+The first physical single-hover candidate completed its phases but failed
+front-left unload at `8.875 N`; recovery restored four supports and release
+completed without a safety fault. The operator rejected that visual read.
+
+The revised planted bow then passed a bounded physical run. Its 732-sample
+baseline measured `122.757 N`; the low pose retained four supports at
+`26.917/27.331/23.078/27.284 N`. The 3.60-second still hold and exact recovery
+completed with no feedback pause or safety fault, ownership released, and
+fresh postflight was state `1/0/0`, battery `49%`, errors zero, STOP false, and
+no owner. The operator rejected it as too subtle. Two increasingly animated
+planted versions also passed telemetry but were rejected as insufficiently
+bowed. A 70 mm differential trial then reached `10.006 deg` during its initial
+sink and tripped the hard 10-degree attitude gate before any heaves. It
+released safely; postflight was `1/0/0`, battery `44%`, errors zero, STOP false,
+four supports, and no owner. The operator judged that partial bow too deep.
+The 56 mm midpoint also failed closed during its initial sink at `10.005 deg`
+pitch, before any heave. One `100.646 ms` feedback-age pause recovered first.
+Four supports remained latched, release completed without retry, and fresh
+postflight was `1/0/0`, battery `42%`, errors zero, STOP false, and no owner.
+Do not retry either rear-extension geometry. The replacement therefore removed
+rear extension to preserve attitude margin. See
+[`TICKET_SADNESS.md`](../../tickets/TICKET_SADNESS.md), and keep Sadness
+suite-only.
+
+The final front-only 48 mm redesign passed a single physical run with every
+heave retaining four supports, no feedback pause or safety fault, exact
+recovery, and clean release. The operator reported that it looked good. Its
+unchanged two-cycle `15.6 s` repeat also passed all six heaves. The second
+recovery safely held through one `100.208 ms` feedback-age event and resumed
+after 20 fresh samples in `74.994 ms`; no safety fault occurred. Fresh
+postflight was `1/0/0`, battery `39%`, errors zero, STOP false, four supports,
+status cycle `2`, and no owner. Keep the normal allowlist `neutral` until the
+accepted planted path is selected and retarget-tested through normal chat.
+
 The Fear candidate is also isolated behind explicit commissioning flags and is
 not part of the normal allowlist. `HARDWARE_FEAR_SINGLE_HOVER_TEST=true` runs
 one guarded front-paw placement after the five-second neutral window;

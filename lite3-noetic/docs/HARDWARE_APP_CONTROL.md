@@ -1237,6 +1237,99 @@ chat selection and retargeting during an active paw sequence.
 
 ### Remaining work
 
+#### Sadness implementation, rejected paw trial, and planted bow — 2026-09-20
+
+Sadness was added to the official continuous MotionSDK runner with isolated
+single-hover and alternating commissioning modes, contact-gated placement, and
+normal-selection retarget tests behind the unchanged `neutral` allowlist. The
+complete local hardware gate and all nine clean aarch64 native suites passed.
+
+The first authorized physical candidate used a 20 mm common crouch, 5 mm front
+droop, and 20 mm left-paw hover. Its 717-sample baseline measured `121.799 N`.
+All commanded phases ran, but the target retained `8.875 N` and all four
+support latches, so the unload gate failed closed. Landing and exact recovery
+restored four supports at `30.921/27.540/39.228/44.443 N`. A single feedback
+pause reached `129.162 ms` and recovered; release completed without a safety
+fault. Fresh postflight was state `1/0/0`, battery `52%`, errors zero, STOP
+false, and no owner. The operator also rejected its visual read.
+
+After the operator clarified that the front/head end should bow downward, a
+separate all-feet-planted six-second diagnostic was implemented: 1.20 seconds
+into a 10 mm common crouch plus 25 mm additional front lowering, a 3.60-second
+still hold, then 1.20 seconds back to exact canonical stand. It does not lift a
+paw or bypass the failed unload gate. The clean aarch64 build and nine suites
+passed, and the installed runner SHA-256 was
+`65c4b168badefd9534ad03612c06055edc607de69a2b9c7eef84bc2274caffbf`.
+
+Fresh preflight was state `1/0/0`, battery `50%`, errors zero, level attitude,
+fresh centered Retroid input, STOP false, active safety services, and no owner.
+The 732-sample contact baseline measured `122.757 N`. The low bow retained four
+supports at `26.917/27.331/23.078/27.284 N`; its hold and exact recovery
+completed with maximum feedback age `9.730 ms`, maximum consecutive update gap
+`10.267 ms`, no pause, and no safety fault. SDK ownership released. Fresh
+postflight was state `1/0/0`, battery `49%`, errors zero, STOP false, four
+loaded supports at `30.442/28.467/37.982/40.395 N`, and no owner. This proves
+the planted diagnostic's bounded execution only; operator visual acceptance
+and the optional paw-unload gate remain open.
+
+The operator rejected that static version as too subtle. A second planted
+version added two 4 mm nods and also passed all support, recovery, fault, and
+release gates, but was still judged insufficiently expressive. A third version
+used a 48 mm front lowering with 4 mm rear lowering and three 14 mm crying
+heaves with alternating 4 mm side tilt. Its 728-sample baseline measured
+`121.714 N`; every phase retained four supports, no pause or safety fault
+occurred, and release succeeded. Fresh postflight was `1/0/0`, battery `45%`,
+errors zero, STOP false, and no owner. The operator then requested a deeper bow.
+
+The next revision held the front at the existing 50 mm per-corner workspace
+limit and extended the rear by 20 mm, producing a 70 mm differential. Fresh
+preflight was `1/0/0`, battery `45%`, errors zero, centered controls, STOP
+false, and no owner; its baseline measured `124.287 N` from 703 samples. During
+the initial sink, live pitch reached `10.006 deg` and the hard 10-degree
+attitude gate aborted before any crying heave. SDK ownership released without
+retry or feedback pause. Fresh postflight was `1/0/0`, battery `44%`, errors
+zero, STOP false, four supports, and no owner. The operator confirmed that the
+partial bow was too deep.
+
+The midpoint revision used an 8 mm rear extension and 48 mm front lowering, a
+56 mm differential, with the same three heaves. It also records a live-gate
+abort distinctly from a support-recovery failure. All nine local and clean
+aarch64 suites passed; installed runner SHA-256 was
+`0a1de0dfd88c8dad91a3f1797a8f666b2fdb432ed8335eab41187f462fdfeefc`.
+Fresh authorized preflight was `1/0/0`, battery `43%`, errors zero, centered
+controls, STOP false, and no owner. Its 723-sample baseline measured
+`119.855 N`. During the initial sink, a `100.646 ms` feedback-age event paused
+and recovered after 20 fresh samples in `83.021 ms`. Pitch then reached
+`10.005 deg`; the hard attitude gate aborted before any crying heave. Four
+supports remained latched at `29.620/30.151/28.136/28.834 N`, and release
+completed without retry. Maximum feedback age/update gap was
+`160.662/161.131 ms`. Fresh postflight was `1/0/0`, battery `42%`, errors zero,
+STOP false, four supports, and no owner. The status correctly retained
+`sadness body visual phase aborted by a live safety gate`. Do not retry either
+rear-extension geometry; redesign with meaningful attitude margin and require
+fresh operator direction before any further physical run.
+
+The final redesign removed rear extension and used front-only 48 mm lowering
+with the same three 14 mm heaves and alternating 4 mm side tilt. Its single
+authorized run used a 711-sample, `123.280 N` baseline; the low pose retained
+four supports at `34.010/31.170/25.206/29.567 N`, and every heave and recovery
+passed. There was no feedback pause or safety fault. Fresh postflight was
+`1/0/0`, battery `41%`, errors zero, STOP false, four supports, and no owner.
+The operator reported that the result looked good, providing visual acceptance.
+
+A bounded `--sadness-body-visual-cycles=1..2` option was then added; values
+above one require the planted visual mode. The unchanged animation ran twice
+under one owner for `15.6 s`. Installed runner SHA-256 was
+`7c2980b02b432a62d18c546853574a36efb4f0b4add91536836f4f0fdb4e648a`.
+Its 744-sample baseline measured `122.305 N`; both low poses and all six heaves
+retained four supports. A `100.208 ms` feedback-age event during cycle 2's
+recovery held safely and resumed after 20 fresh samples in `74.994 ms`.
+Maximum feedback age/update gap was `147.213/147.911 ms`; no safety fault
+occurred. Fresh postflight was `1/0/0`, battery `39%`, errors zero, STOP false,
+four supports, profile cycle `2`, and no owner. This accepts the explicit
+planted suite, not normal chat selection or retargeting; retain the `neutral`
+allowlist.
+
 #### Fear implementation, visual rejection, and redesign trial — 2026-09-20
 
 The Fear ticket now has a dedicated contact-gated MotionSDK state machine. Its

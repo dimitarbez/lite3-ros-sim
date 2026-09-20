@@ -8,7 +8,7 @@
 | Joy | [Alternating front-paw joy](TICKET_JOY_FRONT_PAW.md) | Physical gesture accepted; normal chat integration remains |
 | Affection | [Affection bow and paw offer](TICKET_AFFECTION.md) | Planned |
 | Curiosity | [Curiosity lean and paw hover](TICKET_CURIOSITY.md) | Planned |
-| Sadness | [Sadness lowered posture](TICKET_SADNESS.md) | Planned |
+| Sadness | [Sadness lowered posture](TICKET_SADNESS.md) | Planted bow accepted; normal chat integration pending |
 | Disgust | [Disgust recoil](TICKET_DISGUST.md) | Planned |
 | Fear | [Fear crouch and guarded hovers](TICKET_FEAR.md) | First candidate rejected; redesign failed first unload gate |
 | Surprise | [Surprise rise and freeze](TICKET_SURPRISE.md) | Planned |
@@ -27,6 +27,17 @@ neutral for 0.35 seconds, then start only the newest pending emotion.
   suite completed five seconds of neutral followed by five seconds of joy,
   confirmed unload and landing for both front paws, released SDK ownership,
   and reported no safety fault.
+- **Sadness's planted bow is operator-accepted.** The paw candidate failed front-left
+  unload at `8.875 N`. Three planted redesigns passed telemetry but were judged
+  too subtle. A deeper 70 mm front-to-rear bow then reached `10.006 deg` during
+  its sink and correctly tripped the hard 10-degree attitude gate; it released
+  safely and the operator judged that partial bow too deep. A 56 mm midpoint
+  also reached `10.005 deg` during its sink and failed closed before the
+  heaves. The final front-only 48 mm bow passed its single run and received the
+  operator's positive visual verdict. An unchanged two-cycle 15.6-second repeat
+  retained four supports through all six heaves, recovered, and released with
+  no safety fault. Normal chat selection remains unvalidated, so the normal
+  allowlist is unchanged.
 - **Fear remains unaccepted.** One first-candidate single-hover run passed
   unload/landing, but the full loop failed its first unload on a new baseline,
   and the operator said the motion looked nothing like fear. All trials
@@ -49,8 +60,9 @@ neutral for 0.35 seconds, then start only the newest pending emotion.
   paws; it passed all seven aarch64 suites and an authorized three-cycle physical
   run with every landing restoring four supports. Normal chat selection and
   retargeting remain live-unvalidated, so the checked-in allowlist stays
-  neutral-only. Affection, curiosity, sadness, disgust, and surprise remain to
-  be implemented; Fear still requires physical telemetry and visual acceptance.
+  neutral-only. Affection, curiosity, disgust, and surprise remain to be
+  implemented; Fear still requires operator visual acceptance, while Sadness
+  still requires normal chat selection and retarget validation.
 
 The remaining emotions must be implemented to the same standard as joy:
 recognizable whole-body choreography, explicit phases, IK-generated motion,
@@ -112,11 +124,16 @@ evidence. An emotion is complete only when every item under it is checked.
 ### [Sadness](TICKET_SADNESS.md)
 
 - [x] Intended physical choreography specified below.
-- [ ] Implement the final phased IK/contact-aware profile.
-- [ ] Add native trajectory, bound, recovery, and transition tests.
-- [ ] Integrate normal emotion-state selection through exact neutral.
-- [ ] Pass aarch64 build/tests and a bounded physical telemetry run.
-- [ ] Receive operator visual acceptance as recognizably sad.
+- [x] Implement the final phased IK/contact-aware profile.
+- [x] Add native trajectory, bound, recovery, and transition tests.
+- [x] Integrate normal emotion-state selection through exact neutral.
+- [x] Pass local and aarch64 build/tests.
+- [x] Complete a bounded planted-bow telemetry run and clean release.
+- [x] Redesign without rear extension and pass single and two-cycle physical
+  runs.
+- [ ] Rework and pass the optional withdrawn-paw unload gate.
+- [x] Receive operator visual acceptance as recognizably sad.
+- [ ] Select the accepted planted bow through normal chat and validate retargets.
 
 ### [Disgust](TICKET_DISGUST.md)
 

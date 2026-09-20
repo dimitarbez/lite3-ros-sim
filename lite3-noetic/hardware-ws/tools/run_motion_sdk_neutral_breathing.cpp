@@ -28,6 +28,7 @@
 #include "motion_sdk_expression_profile.hpp"
 #include "motion_sdk_fear_guard.hpp"
 #include "motion_sdk_paw_lift.hpp"
+#include "motion_sdk_sadness.hpp"
 #include "motion_sdk_safety.hpp"
 #include "motion_sdk_shared_state.hpp"
 #include "receiver.h"
@@ -510,7 +511,11 @@ bool SetPawLiftCommand(RobotCmd* command, int leg, double lift_m,
                        double common_z_m = 0.0,
                        double common_z_velocity_mps = 0.0,
                        double stance_y_m = 0.0,
-                       double stance_y_velocity_mps = 0.0) {
+                       double stance_y_velocity_mps = 0.0,
+                       double front_z_m = 0.0,
+                       double front_z_velocity_mps = 0.0,
+                       double roll_z_m = 0.0,
+                       double roll_z_velocity_mps = 0.0) {
   SetStandCommand(command, BreathPose{});
   if (leg < 0 || leg >= 2) return false;
   for (int current_leg = 0; current_leg < 4; ++current_leg) {
@@ -523,12 +528,19 @@ bool SetPawLiftCommand(RobotCmd* command, int leg, double lift_m,
              diagonal_support_z_velocity_mps : 0.0));
     const double stance_sign =
         (current_leg == 0 || current_leg == 2) ? -1.0 : 1.0;
+    const double roll_sign =
+        (current_leg == 0 || current_leg == 2) ? 1.0 : -1.0;
+    const double front_z = current_leg < 2 ? front_z_m : 0.0;
+    const double front_z_velocity =
+        current_leg < 2 ? front_z_velocity_mps : 0.0;
     const CartesianLegJointTarget target = SampleLite3CartesianLeg(
         0.0, kStandHipY, kStandKnee, current_leg,
-        shift_x_m, shift_y_m + stance_sign * stance_y_m, lift,
+        shift_x_m, shift_y_m + stance_sign * stance_y_m,
+        lift + front_z + roll_sign * roll_z_m,
         shift_x_velocity_mps,
         shift_y_velocity_mps + stance_sign * stance_y_velocity_mps,
-        lift_velocity);
+        lift_velocity + front_z_velocity +
+            roll_sign * roll_z_velocity_mps);
     if (!target.valid) return false;
     auto& hip_x = command->joint_cmd[3 * current_leg];
     auto& hip_y = command->joint_cmd[3 * current_leg + 1];
@@ -801,7 +813,11 @@ bool RunPawLiftSegment(const std::string& name, int leg, double start_lift,
                        double end_common_z = 0.0,
                        double start_stance_y = 0.0,
                        double end_stance_y = 0.0,
-                       const std::function<void()>& observe_request = {}) {
+                       const std::function<void()>& observe_request = {},
+                       double start_front_z = 0.0,
+                       double end_front_z = 0.0,
+                       double start_roll_z = 0.0,
+                       double end_roll_z = 0.0) {
   bool estimator_fault = false;
   status->phase = name;
   PublishExpressionStatus(status_writer, *status);
@@ -826,12 +842,18 @@ bool RunPawLiftSegment(const std::string& name, int leg, double start_lift,
             elapsed, duration, start_common_z, end_common_z);
         const BreathScalar stance_y = QuinticBreathSegment(
             elapsed, duration, start_stance_y, end_stance_y);
+        const BreathScalar front_z = QuinticBreathSegment(
+            elapsed, duration, start_front_z, end_front_z);
+        const BreathScalar roll_z = QuinticBreathSegment(
+            elapsed, duration, start_roll_z, end_roll_z);
         if (!SetPawLiftCommand(output, leg, lift.position, lift.velocity,
                                shift_x.position, shift_y.position,
                                shift_x.velocity, shift_y.velocity,
                                support_z.position, support_z.velocity,
                                common_z.position, common_z.velocity,
-                               stance_y.position, stance_y.velocity)) {
+                               stance_y.position, stance_y.velocity,
+                               front_z.position, front_z.velocity,
+                               roll_z.position, roll_z.velocity)) {
           estimator_fault = true;
           return;
         }
@@ -1312,6 +1334,385 @@ bool RunAngerStompTest(Sender* sender, FeedbackSource* receiver,
       four_feet_recovered;
 }
 
+bool RunSadnessBodyVisualTest(Sender* sender, FeedbackSource* receiver,
+                              RobotStateSource* robot_state,
+                              RobotCmd* command,
+                              FeedbackPauseStats* pause_stats,
+                              FootLoadMonitor* monitor,
+                              StopSource* stop_source,
+                              SequenceRecordWriter* status_writer,
+                              ExpressionStatus* status,
+                              int target_leg) {
+  constexpr double kDiagonalSupportZ = 0.0;
+  if ((target_leg != 0 && target_leg != 1) ||
+      !monitor->baseline_valid() || monitor->support_count() != 4 ||
+      !SadnessBodyVisualLimitsValid()) {
+    status->last_fault =
+        "sadness body visual requires valid bounds and four-foot baseline";
+    return false;
+  }
+  constexpr double kBaseRollZ = 0.0;
+  status->requested = "sadness";
+  status->active = "sadness";
+  status->estimated_contact_motion_gate_enabled = false;
+  PublishExpressionStatus(status_writer, *status);
+
+  bool okay = RunPawLiftSegment(
+      "sadness_body_sink", target_leg, 0.0, 0.0,
+      0.0, 0.0, 0.0, 0.0, 0.0, kDiagonalSupportZ,
+      kSadnessBodySinkSeconds, sender, receiver, robot_state, command,
+      pause_stats, monitor, stop_source, status, status_writer,
+      0.0, -kSadnessBowRearRiseMeters,
+      0.0, kSadnessStanceMeters, {},
+      0.0, kSadnessBowFrontDropMeters, 0.0, kBaseRollZ);
+  double current_front_z = okay ? kSadnessBowFrontDropMeters : 0.0;
+  double current_roll_z = kBaseRollZ;
+  const bool low_support = okay && monitor->support_count() == 4;
+  std::cout << "SADNESS_BODY_LOW support_count=" << monitor->support_count()
+            << " forces_n=" << monitor->filtered()[0] << ','
+            << monitor->filtered()[1] << ',' << monitor->filtered()[2] << ','
+            << monitor->filtered()[3] << std::endl;
+  bool animated_support = low_support;
+  if (low_support) {
+    okay = RunPawLiftSegment(
+        "sadness_body_settle", target_leg, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, kDiagonalSupportZ,
+        kSadnessBodySettleSeconds, sender, receiver, robot_state, command,
+        pause_stats, monitor, stop_source, status, status_writer,
+        -kSadnessBowRearRiseMeters, -kSadnessBowRearRiseMeters,
+        kSadnessStanceMeters, kSadnessStanceMeters, {},
+        kSadnessBowFrontDropMeters, kSadnessBowFrontDropMeters,
+        kBaseRollZ, kBaseRollZ);
+    animated_support = okay && monitor->support_count() == 4;
+  }
+  for (int sob = 1; okay && animated_support &&
+       sob <= kSadnessSobCycles; ++sob) {
+    const std::string prefix =
+        "sadness_body_sob_" + std::to_string(sob) + "_";
+    const double sob_roll_z = SadnessSobRollForCycle(sob);
+    const double raised_front_z =
+        kSadnessBowFrontDropMeters - kSadnessSobRiseMeters;
+    okay = RunPawLiftSegment(
+        prefix + "rise", target_leg, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, kDiagonalSupportZ,
+        kSadnessSobRiseSeconds, sender, receiver, robot_state, command,
+        pause_stats, monitor, stop_source, status, status_writer,
+        -kSadnessBowRearRiseMeters, -kSadnessBowRearRiseMeters,
+        kSadnessStanceMeters, kSadnessStanceMeters, {},
+        current_front_z, raised_front_z,
+        current_roll_z, sob_roll_z);
+    if (okay) {
+      current_front_z = raised_front_z;
+      current_roll_z = sob_roll_z;
+    }
+    animated_support = okay && monitor->support_count() == 4;
+    std::cout << "SADNESS_BODY_SOB cycle=" << sob
+              << " phase=rise support_count=" << monitor->support_count()
+              << std::endl;
+    if (animated_support) {
+      okay = RunPawLiftSegment(
+          prefix + "fall", target_leg, 0.0, 0.0,
+          0.0, 0.0, 0.0, 0.0, 0.0, kDiagonalSupportZ,
+          kSadnessSobFallSeconds, sender, receiver, robot_state, command,
+          pause_stats, monitor, stop_source, status, status_writer,
+          -kSadnessBowRearRiseMeters, -kSadnessBowRearRiseMeters,
+          kSadnessStanceMeters, kSadnessStanceMeters, {},
+          current_front_z, kSadnessBowFrontDropMeters,
+          current_roll_z, kBaseRollZ);
+      if (okay) {
+        current_front_z = kSadnessBowFrontDropMeters;
+        current_roll_z = kBaseRollZ;
+      }
+      animated_support = okay && monitor->support_count() == 4;
+      std::cout << "SADNESS_BODY_SOB cycle=" << sob
+                << " phase=fall support_count=" << monitor->support_count()
+                << std::endl;
+    }
+  }
+  if (okay && animated_support) {
+    okay = RunPawLiftSegment(
+        "sadness_body_final_hold", target_leg, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, kDiagonalSupportZ,
+        kSadnessBodyFinalHoldSeconds, sender, receiver, robot_state, command,
+        pause_stats, monitor, stop_source, status, status_writer,
+        -kSadnessBowRearRiseMeters, -kSadnessBowRearRiseMeters,
+        kSadnessStanceMeters, kSadnessStanceMeters, {},
+        kSadnessBowFrontDropMeters, kSadnessBowFrontDropMeters,
+        kBaseRollZ, kBaseRollZ);
+    animated_support = okay && monitor->support_count() == 4;
+  }
+  const bool held_support = okay && animated_support;
+  bool recover_okay = false;
+  if (okay) {
+    recover_okay = RunPawLiftSegment(
+        "sadness_body_recover", target_leg, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, kDiagonalSupportZ,
+        kSadnessBodyRecoverSeconds, sender, receiver, robot_state, command,
+        pause_stats, monitor, stop_source, status, status_writer,
+        -kSadnessBowRearRiseMeters, 0.0,
+        kSadnessStanceMeters, 0.0, {},
+        current_front_z, 0.0, current_roll_z, 0.0);
+  }
+  const bool recovered = recover_okay && monitor->support_count() == 4;
+  status->active = "neutral";
+  status->phase = "sadness_body_visual_complete";
+  if ((!okay || !recover_okay) && status->last_fault.empty()) {
+    status->last_fault =
+        "sadness body visual phase aborted by a live safety gate";
+  } else if ((!held_support || !recovered) && status->last_fault.empty()) {
+    status->last_fault =
+        "sadness body visual did not preserve and recover four supports";
+  }
+  PublishExpressionStatus(status_writer, *status);
+  return okay && held_support && recover_okay && recovered;
+}
+
+bool RunSadnessTest(Sender* sender, FeedbackSource* receiver,
+                    RobotStateSource* robot_state, RobotCmd* command,
+                    FeedbackPauseStats* pause_stats,
+                    FootLoadMonitor* monitor, StopSource* stop_source,
+                    SequenceRecordWriter* status_writer,
+                    ExpressionStatus* status, double test_lift,
+                    int target_leg,
+                    SadnessRetargetTracker* retarget_tracker = nullptr,
+                    EmotionSource* emotion_source = nullptr) {
+  constexpr double kDiagonalSupportZ = 0.0;
+  const bool chat_runtime =
+      retarget_tracker != nullptr && emotion_source != nullptr;
+  if ((retarget_tracker == nullptr) != (emotion_source == nullptr)) {
+    status->last_fault = "incomplete sadness chat-retarget configuration";
+    return false;
+  }
+  if ((target_leg != 0 && target_leg != 1) ||
+      !SadnessLimitsValid(test_lift) || !monitor->baseline_valid() ||
+      monitor->support_count() != 4) {
+    std::cerr << "ABORT sadness requires valid bounds and four-foot baseline"
+              << std::endl;
+    return false;
+  }
+
+  const std::string side = target_leg == 0 ? "front_left" : "front_right";
+  const double support_shift_x = target_leg == 0
+      ? kSadnessLeftSupportShiftXMeters
+      : kSadnessRightSupportShiftXMeters;
+  const double support_shift_y = target_leg == 0
+      ? -kSadnessSupportShiftYMeters : kSadnessSupportShiftYMeters;
+  const double roll_z = SadnessRollForTarget(target_leg);
+  status->requested = "sadness";
+  status->active = "sadness";
+  status->estimated_contact_motion_gate_enabled = true;
+  PublishExpressionStatus(status_writer, *status);
+
+  const std::function<void()> observe_request = [&]() {
+    if (!chat_runtime) return;
+    const EmotionState observed = emotion_source->GetState();
+    retarget_tracker->Observe(
+        observed.valid, observed.age_seconds <= kEmotionTimeoutSeconds,
+        observed.transport_sequence, observed.emotion,
+        observed.valence, observed.arousal);
+    status->link_age = observed.age_seconds;
+    status->requested = retarget_tracker->emotion();
+    status->pending = retarget_tracker->cancellation_requested()
+        ? retarget_tracker->emotion() : "";
+  };
+  observe_request();
+  std::cout << "SADNESS_BOUNDS side=" << side
+            << " lift_m=" << test_lift
+            << " crouch_m=" << kSadnessCrouchMeters
+            << " front_droop_m=" << kSadnessFrontDroopMeters
+            << " roll_m=" << roll_z
+            << " max_paw_velocity_mps="
+            << SadnessQuinticMaximumSpeed(test_lift,
+                                          kSadnessLowerSeconds)
+            << " max_paw_acceleration_mps2="
+            << SadnessQuinticMaximumAcceleration(test_lift,
+                                                 kSadnessLowerSeconds)
+            << " landing_dwell_s=" << kSadnessLandingDwellSeconds
+            << std::endl;
+
+  bool okay = RunPawLiftSegment(
+      "sadness_sink", target_leg, 0.0, 0.0,
+      0.0, 0.0, 0.0, 0.0,
+      0.0, kDiagonalSupportZ, kSadnessSinkSeconds,
+      sender, receiver, robot_state, command, pause_stats, monitor,
+      stop_source, status, status_writer,
+      0.0, kSadnessCrouchMeters,
+      0.0, kSadnessStanceMeters, observe_request,
+      0.0, kSadnessFrontDroopMeters, 0.0, roll_z);
+  if (okay) {
+    okay = RunPawLiftSegment(
+        "sadness_withdraw_" + side, target_leg, 0.0, 0.0,
+        0.0, support_shift_x, 0.0, support_shift_y,
+        kDiagonalSupportZ, kDiagonalSupportZ, kSadnessWithdrawSeconds,
+        sender, receiver, robot_state, command, pause_stats, monitor,
+        stop_source, status, status_writer,
+        kSadnessCrouchMeters, kSadnessCrouchMeters,
+        kSadnessStanceMeters, kSadnessStanceMeters, observe_request,
+        kSadnessFrontDroopMeters, kSadnessFrontDroopMeters,
+        roll_z, roll_z);
+  }
+
+  SadnessHoverGate hover_gate;
+  bool hover_started = false;
+  bool unload_confirmed = false;
+  bool paw_loaded = monitor->loaded(target_leg);
+  bool gate_failure = false;
+  if (okay && (!chat_runtime || retarget_tracker->may_start_next_hover())) {
+    hover_started = hover_gate.BeginHover();
+    if (!hover_started) {
+      status->last_fault = "sadness hover gate refused first hover";
+      gate_failure = true;
+    }
+  }
+  if (okay && hover_started) {
+    okay = RunPawLiftSegment(
+        "sadness_low_hover_" + side, target_leg, 0.0, test_lift,
+        support_shift_x, support_shift_x,
+        support_shift_y, support_shift_y,
+        kDiagonalSupportZ, kDiagonalSupportZ, kSadnessHoverSeconds,
+        sender, receiver, robot_state, command, pause_stats, monitor,
+        stop_source, status, status_writer,
+        kSadnessCrouchMeters, kSadnessCrouchMeters,
+        kSadnessStanceMeters, kSadnessStanceMeters, observe_request,
+        kSadnessFrontDroopMeters, kSadnessFrontDroopMeters,
+        roll_z, roll_z);
+  }
+  if (okay && hover_started &&
+      (!chat_runtime || !retarget_tracker->cancellation_requested())) {
+    okay = RunPawLiftSegment(
+        "sadness_pause_" + side, target_leg, test_lift, test_lift,
+        support_shift_x, support_shift_x,
+        support_shift_y, support_shift_y,
+        kDiagonalSupportZ, kDiagonalSupportZ, kSadnessPauseSeconds,
+        sender, receiver, robot_state, command, pause_stats, monitor,
+        stop_source, status, status_writer,
+        kSadnessCrouchMeters, kSadnessCrouchMeters,
+        kSadnessStanceMeters, kSadnessStanceMeters, observe_request,
+        kSadnessFrontDroopMeters, kSadnessFrontDroopMeters,
+        roll_z, roll_z);
+  }
+  if (okay && hover_started) {
+    unload_confirmed = !monitor->loaded(target_leg) &&
+        OtherPawSupportsValid(*monitor, target_leg);
+    std::cout << "SADNESS_UNLOAD side=" << side
+              << " confirmed=" << (unload_confirmed ? "true" : "false")
+              << " force_n=" << monitor->filtered()[target_leg]
+              << " support_count=" << monitor->support_count() << std::endl;
+  }
+
+  // A category change or a failed unload never abandons the paw.  Lower it
+  // gently while removing the body transfer, then dwell before judging load.
+  if (okay && hover_started) {
+    okay = RunPawLiftSegment(
+        "sadness_place_" + side, target_leg, test_lift, 0.0,
+        support_shift_x, 0.0, support_shift_y, 0.0,
+        kDiagonalSupportZ, kDiagonalSupportZ, kSadnessLowerSeconds,
+        sender, receiver, robot_state, command, pause_stats, monitor,
+        stop_source, status, status_writer,
+        kSadnessCrouchMeters, kSadnessCrouchMeters,
+        kSadnessStanceMeters, kSadnessStanceMeters, observe_request,
+        kSadnessFrontDroopMeters, kSadnessFrontDroopMeters,
+        roll_z, roll_z);
+  }
+  if (okay && hover_started) {
+    okay = RunPawLiftSegment(
+        "sadness_landing_dwell_" + side, target_leg, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0,
+        kDiagonalSupportZ, kDiagonalSupportZ,
+        kSadnessLandingDwellSeconds,
+        sender, receiver, robot_state, command, pause_stats, monitor,
+        stop_source, status, status_writer,
+        kSadnessCrouchMeters, kSadnessCrouchMeters,
+        kSadnessStanceMeters, kSadnessStanceMeters, observe_request,
+        kSadnessFrontDroopMeters, kSadnessFrontDroopMeters,
+        roll_z, roll_z);
+    paw_loaded = okay && monitor->loaded(target_leg);
+  }
+
+  const bool retargeting_before_recover = chat_runtime &&
+      retarget_tracker->cancellation_requested();
+  bool recover_okay = false;
+  if (okay) {
+    const double recovery_seconds = retargeting_before_recover
+        ? ExpressionEngine::kNeutralReturnSeconds : kSadnessRecoverSeconds;
+    recover_okay = RunPawLiftSegment(
+        "sadness_recover", target_leg, 0.0, 0.0,
+        hover_started ? 0.0 : support_shift_x, 0.0,
+        hover_started ? 0.0 : support_shift_y, 0.0,
+        kDiagonalSupportZ, 0.0, recovery_seconds,
+        sender, receiver, robot_state, command, pause_stats, monitor,
+        stop_source, status, status_writer,
+        kSadnessCrouchMeters, 0.0,
+        kSadnessStanceMeters, 0.0, observe_request,
+        kSadnessFrontDroopMeters, 0.0, roll_z, 0.0);
+  }
+
+  // If the request arrived during the normal 1.2-second loop recovery, start
+  // the global 1.5-second exact-neutral transition now.  It is intentionally
+  // redundant rather than shortening the non-negotiable category boundary.
+  bool external_return_okay = true;
+  const bool retargeting_after_recover = chat_runtime && recover_okay &&
+      retarget_tracker->cancellation_requested();
+  if (retargeting_after_recover && !retargeting_before_recover) {
+    external_return_okay = RunPawLiftSegment(
+        "sadness_retarget_neutral_return", target_leg, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, kDiagonalSupportZ, 0.0,
+        ExpressionEngine::kNeutralReturnSeconds,
+        sender, receiver, robot_state, command, pause_stats, monitor,
+        stop_source, status, status_writer,
+        0.0, 0.0, 0.0, 0.0, observe_request);
+  }
+  bool neutral_hold_okay = true;
+  if (recover_okay && external_return_okay && retargeting_after_recover) {
+    neutral_hold_okay = RunPawLiftSegment(
+        "sadness_neutral_hold", target_leg, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, kDiagonalSupportZ, 0.0,
+        ExpressionEngine::kNeutralHoldSeconds,
+        sender, receiver, robot_state, command, pause_stats, monitor,
+        stop_source, status, status_writer,
+        0.0, 0.0, 0.0, 0.0, observe_request);
+  }
+
+  const bool four_feet_recovered = recover_okay && external_return_okay &&
+      neutral_hold_okay && monitor->support_count() == 4;
+  if (hover_started) {
+    hover_gate.CompleteLanding(
+        paw_loaded, four_feet_recovered,
+        okay ? kSadnessLandingDwellSeconds : 0.0);
+  }
+  std::cout << "SADNESS_LANDING side=" << side
+            << " paw_loaded=" << (paw_loaded ? "true" : "false")
+            << " four_feet_recovered="
+            << (four_feet_recovered ? "true" : "false")
+            << " force_n=" << monitor->filtered()[target_leg]
+            << " support_count=" << monitor->support_count()
+            << " forces_n=" << monitor->filtered()[0] << ','
+            << monitor->filtered()[1] << ',' << monitor->filtered()[2] << ','
+            << monitor->filtered()[3]
+            << " dwell_s=" << kSadnessLandingDwellSeconds << std::endl;
+
+  const bool transition_complete = chat_runtime &&
+      retarget_tracker->cancellation_requested();
+  status->active = chat_runtime && !transition_complete
+      ? "sadness" : "neutral";
+  status->phase = transition_complete
+      ? "sadness_external_neutral_complete" : "sadness_test_complete";
+  status->estimated_contact_motion_gate_enabled = false;
+  if (hover_started && (!unload_confirmed || !paw_loaded) &&
+      status->last_fault.empty()) {
+    status->last_fault = "sadness unload or landing confirmation failed";
+    gate_failure = true;
+  }
+  if (!four_feet_recovered && status->last_fault.empty()) {
+    status->last_fault =
+        "sadness exact recovery did not restore four-foot support";
+  }
+  PublishExpressionStatus(status_writer, *status);
+  return okay && !gate_failure && recover_okay && external_return_okay &&
+      neutral_hold_okay && four_feet_recovered &&
+      (!hover_started || hover_gate.next_hover_allowed());
+}
+
 bool RunFearGuardTest(Sender* sender, FeedbackSource* receiver,
                       RobotStateSource* robot_state, RobotCmd* command,
                       FeedbackPauseStats* pause_stats,
@@ -1533,6 +1934,8 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
   uint64_t last_transport_sequence = 0;
   uint64_t anger_profile_cycle = 0;
   bool anger_runtime_active = false;
+  uint64_t sadness_profile_cycle = 0;
+  bool sadness_runtime_active = false;
   uint64_t fear_profile_cycle = 0;
   bool fear_runtime_active = false;
   RobotCmd hold_command = *command;
@@ -1682,6 +2085,66 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
           std::this_thread::sleep_until(next);
           continue;
         }
+        if (engine.active() == "sadness" && engine.phase() == "profile") {
+          if (!sadness_runtime_active) {
+            sadness_runtime_active = true;
+            sadness_profile_cycle = 0;
+          }
+          status->requested = engine.requested();
+          status->active = "sadness";
+          status->phase = "sadness_runtime";
+          status->profile_cycle = sadness_profile_cycle;
+          status->pending.clear();
+          PublishExpressionStatus(status_writer, *status);
+
+          SadnessRetargetTracker retarget(last_transport_sequence);
+          const double runtime_lift = std::max(
+              kSadnessMinimumLiftMeters, kSadnessLiftMeters * profile_scale);
+          const bool sadness_okay = RunSadnessTest(
+              sender, receiver, robot_state, command, pause_stats,
+              foot_load_monitor, stop_source, status_writer, status,
+              runtime_lift, static_cast<int>(sadness_profile_cycle % 2),
+              &retarget, emotion_source);
+          last_transport_sequence = retarget.last_sequence();
+          const auto after_action = std::chrono::steady_clock::now();
+          last_trajectory_tick = after_action;
+          next = after_action;
+          hold_command = *command;
+          if (!sadness_okay) return false;
+
+          if (retarget.cancellation_requested()) {
+            sadness_runtime_active = false;
+            if (retarget.stale()) {
+              stale_latched = true;
+              status->requested = "neutral";
+              status->active = "neutral";
+              status->pending.clear();
+              status->release_state = "stale_link_release";
+              PublishExpressionStatus(status_writer, *status);
+              return true;
+            }
+            engine.CompleteExternalNeutralTransition(
+                retarget.emotion(), retarget.valence(), retarget.arousal(),
+                trajectory_time);
+          } else {
+            engine.Request(
+                retarget.emotion(), retarget.valence(), retarget.arousal(),
+                trajectory_time);
+            ++sadness_profile_cycle;
+          }
+
+          status->requested = engine.requested();
+          status->active = engine.active();
+          status->phase = engine.phase();
+          status->profile_cycle = sadness_runtime_active
+              ? sadness_profile_cycle : engine.profile_cycle();
+          status->pending = engine.pending();
+          PublishExpressionStatus(status_writer, *status);
+          ++tick;
+          next += std::chrono::milliseconds(1);
+          std::this_thread::sleep_until(next);
+          continue;
+        }
         if (engine.active() == "fear" && engine.phase() == "profile") {
           if (!fear_runtime_active) {
             fear_runtime_active = true;
@@ -1742,6 +2205,9 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
         if (engine.phase() != "profile" || engine.active() != "anger") {
           anger_runtime_active = false;
         }
+        if (engine.phase() != "profile" || engine.active() != "sadness") {
+          sadness_runtime_active = false;
+        }
         if (engine.phase() != "profile" || engine.active() != "fear") {
           fear_runtime_active = false;
         }
@@ -1759,7 +2225,8 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
     status->active = engine.active();
     status->phase = engine.phase();
     status->profile_cycle = anger_runtime_active ? anger_profile_cycle :
-        (fear_runtime_active ? fear_profile_cycle : engine.profile_cycle());
+        (sadness_runtime_active ? sadness_profile_cycle :
+         (fear_runtime_active ? fear_profile_cycle : engine.profile_cycle()));
     status->pending = engine.pending();
     if (tick % 20 == 0) PublishExpressionStatus(status_writer, *status);
     if (stale_latched && engine.stale_reset_complete()) {
@@ -1792,12 +2259,18 @@ int main(int argc, char** argv) {
   bool anger_suite_test = false;
   int anger_suite_cycles = 1;
   int anger_first_leg = 0;
+  bool sadness_hover_test = false;
+  bool sadness_suite_test = false;
+  bool sadness_body_visual_test = false;
+  int sadness_body_visual_cycles = 1;
+  int sadness_first_leg = 0;
   bool fear_body_visual_test = false;
   bool fear_guard_test = false;
   bool fear_suite_test = false;
   int fear_first_leg = 0;
   double paw_lift_meters = 0.005;
   double anger_lift_meters = kAngerLiftMeters;
+  double sadness_lift_meters = kSadnessLiftMeters;
   double fear_lift_meters = kFearLiftMeters;
   double profile_scale = 1.0;
   std::set<std::string> commissioned{"neutral"};
@@ -1818,6 +2291,11 @@ int main(int argc, char** argv) {
                 << " [--anger-suite-cycles=1..3]"
                 << " [--anger-first-paw=left|right]"
                 << " [--anger-lift-meters=0.010..0.035]"
+                << " [--sadness-body-visual-test]"
+                << " [--sadness-body-visual-cycles=1..2]"
+                << " [--sadness-single-hover-test] [--sadness-suite-test]"
+                << " [--sadness-first-paw=left|right]"
+                << " [--sadness-lift-meters=0.015..0.025]"
                 << " [--fear-body-visual-test]"
                 << " [--fear-single-hover-test] [--fear-suite-test]"
                 << " [--fear-first-paw=left|right]"
@@ -1848,6 +2326,24 @@ int main(int argc, char** argv) {
     }
     else if (argument.rfind("--anger-lift-meters=", 0) == 0) {
       anger_lift_meters = std::stod(argument.substr(20));
+    }
+    else if (argument == "--sadness-single-hover-test") {
+      sadness_hover_test = true;
+    }
+    else if (argument == "--sadness-body-visual-test") {
+      sadness_body_visual_test = true;
+    }
+    else if (argument.rfind("--sadness-body-visual-cycles=", 0) == 0) {
+      sadness_body_visual_cycles = std::stoi(argument.substr(29));
+    }
+    else if (argument == "--sadness-suite-test") {
+      sadness_hover_test = true;
+      sadness_suite_test = true;
+    }
+    else if (argument == "--sadness-first-paw=left") sadness_first_leg = 0;
+    else if (argument == "--sadness-first-paw=right") sadness_first_leg = 1;
+    else if (argument.rfind("--sadness-lift-meters=", 0) == 0) {
+      sadness_lift_meters = std::stod(argument.substr(22));
     }
     else if (argument == "--fear-body-visual-test") {
       fear_body_visual_test = true;
@@ -1897,6 +2393,11 @@ int main(int argc, char** argv) {
                 << " [--anger-suite-cycles=1..3]"
                 << " [--anger-first-paw=left|right]"
                 << " [--anger-lift-meters=0.010..0.035]"
+                << " [--sadness-body-visual-test]"
+                << " [--sadness-body-visual-cycles=1..2]"
+                << " [--sadness-single-hover-test] [--sadness-suite-test]"
+                << " [--sadness-first-paw=left|right]"
+                << " [--sadness-lift-meters=0.015..0.025]"
                 << " [--fear-body-visual-test]"
                 << " [--fear-single-hover-test] [--fear-suite-test]"
                 << " [--fear-first-paw=left|right]"
@@ -1920,6 +2421,10 @@ int main(int argc, char** argv) {
     std::cerr << "anger lift or touchdown bounds are invalid" << std::endl;
     return 2;
   }
+  if (!SadnessLimitsValid(sadness_lift_meters)) {
+    std::cerr << "sadness lift or trajectory bounds are invalid" << std::endl;
+    return 2;
+  }
   if (!FearGuardLimitsValid(fear_lift_meters)) {
     std::cerr << "fear lift or touchdown bounds are invalid" << std::endl;
     return 2;
@@ -1929,11 +2434,23 @@ int main(int argc, char** argv) {
               << std::endl;
     return 2;
   }
+  if (sadness_body_visual_test && sadness_hover_test) {
+    std::cerr << "sadness body visual and paw commissioning modes are mutually exclusive"
+              << std::endl;
+    return 2;
+  }
+  if (sadness_body_visual_cycles < 1 || sadness_body_visual_cycles > 2 ||
+      (!sadness_body_visual_test && sadness_body_visual_cycles != 1)) {
+    std::cerr << "sadness body visual cycles must be 1..2 and require body visual mode"
+              << std::endl;
+    return 2;
+  }
   const int commissioning_modes = (joy_paw_test ? 1 : 0) +
       (anger_stomp_test ? 1 : 0) +
+      ((sadness_body_visual_test || sadness_hover_test) ? 1 : 0) +
       ((fear_body_visual_test || fear_guard_test) ? 1 : 0);
   if (commissioning_modes > 1) {
-    std::cerr << "joy, anger, and fear commissioning modes are mutually exclusive"
+    std::cerr << "joy, anger, sadness, and fear commissioning modes are mutually exclusive"
               << std::endl;
     return 2;
   }
@@ -2144,6 +2661,37 @@ int main(int argc, char** argv) {
               &foot_load_monitor, &stop_source, &status_writer, &status,
               anger_lift_meters, anger_first_leg, anger_suite_test);
         }
+      }
+    } else if (sadness_body_visual_test) {
+      okay = RunNeutralTestWindow(
+          &sender, &receiver, &robot_state, &command, &pause_stats,
+          &foot_load_monitor, &stop_source, &status_writer, &status);
+      if (okay) {
+        for (int cycle = 1;
+             okay && cycle <= sadness_body_visual_cycles; ++cycle) {
+          status.profile_cycle = static_cast<uint64_t>(cycle);
+          std::cout << "SADNESS_BODY_VISUAL_CYCLE cycle=" << cycle
+                    << " total=" << sadness_body_visual_cycles << std::endl;
+          okay = RunSadnessBodyVisualTest(
+              &sender, &receiver, &robot_state, &command, &pause_stats,
+              &foot_load_monitor, &stop_source, &status_writer, &status,
+              sadness_first_leg);
+        }
+      }
+    } else if (sadness_hover_test) {
+      okay = RunNeutralTestWindow(
+          &sender, &receiver, &robot_state, &command, &pause_stats,
+          &foot_load_monitor, &stop_source, &status_writer, &status);
+      const int sadness_cycles = sadness_suite_test ? 2 : 1;
+      for (int cycle = 0; okay && cycle < sadness_cycles; ++cycle) {
+        const int target_leg = cycle == 0
+            ? sadness_first_leg : 1 - sadness_first_leg;
+        std::cout << "SADNESS_SUITE_CYCLE cycle=" << cycle + 1
+                  << " total=" << sadness_cycles << std::endl;
+        okay = RunSadnessTest(
+            &sender, &receiver, &robot_state, &command, &pause_stats,
+            &foot_load_monitor, &stop_source, &status_writer, &status,
+            sadness_lift_meters, target_leg);
       }
     } else if (fear_body_visual_test) {
       okay = RunNeutralTestWindow(
