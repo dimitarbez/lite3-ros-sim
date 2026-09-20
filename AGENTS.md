@@ -109,6 +109,7 @@ Source `/opt/ros/noetic/setup.bash` and `devel/setup.bash` in raw commands that 
 ## Change discipline
 
 - Inspect all four Git repositories independently. A clean wrapper status does not prove its submodules are clean. Never silently advance a submodule or wrapper gitlink.
+- Stay on the currently checked-out branch. Do not create or switch branches unless the user explicitly requests that branch operation in the current task.
 - Make focused changes in the active Noetic fork and EmotionBot checkout. Keep `lite3_vmc_upstream` clean.
 - Do not pull over local changes. `make bootstrap` may fast-forward a clean attached active checkout, so inspect status first.
 - Preserve topic types and coordinate semantics. Document every new topic, parameter, node, launch file, Make target, and operator-visible recovery path.
