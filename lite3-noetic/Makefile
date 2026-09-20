@@ -17,6 +17,8 @@ OPENAI_BRIDGE_CONTAINER ?= lite3-openai-bridge
 OPENAI_IMAGE_TAG ?= lite3-openai-runtime:local
 OPENAI_ENV_FILE ?= $(WORKSPACE_DIR)/.env
 OPENAI_TEST_PORT ?= 8766
+OPENAI_DNS_PRIMARY ?= 1.1.1.1
+OPENAI_DNS_SECONDARY ?= 8.8.8.8
 HARDWARE_TUNNEL_PORT ?= 8767
 HARDWARE_MINIMUM_BATTERY ?= 25
 HARDWARE_COMMISSIONED_EMOTIONS ?= neutral
@@ -145,7 +147,7 @@ start-openai-bridge:
 > set +a; \
 > test -n "$${OPENAI_API_KEY:-}" || { echo "OPENAI_API_KEY is absent (set it in the environment or $(OPENAI_ENV_FILE))"; exit 2; }; \
 > docker rm -f "$(OPENAI_BRIDGE_CONTAINER)" >/dev/null 2>&1 || true; \
-> docker run -d --rm --name "$(OPENAI_BRIDGE_CONTAINER)" --network host --env OPENAI_API_KEY "$(OPENAI_IMAGE_TAG)" >/dev/null; \
+> docker run -d --rm --name "$(OPENAI_BRIDGE_CONTAINER)" --network host --dns "$(OPENAI_DNS_PRIMARY)" --dns "$(OPENAI_DNS_SECONDARY)" --env OPENAI_API_KEY "$(OPENAI_IMAGE_TAG)" >/dev/null; \
 > for attempt in $$(seq 1 40); do curl -fsS http://127.0.0.1:8765/health >/dev/null && exit 0; sleep 0.25; done; \
 > echo "OpenAI bridge did not become ready"; exit 1
 

@@ -283,6 +283,10 @@ make -C lite3-noetic emotion-openai-live-smoke
 ```
 
 This is a connection smoke test only. It reports metadata rather than generated response text.
+The sidecar uses explicit public DNS resolvers by default because WSL's generated
+resolver can fail transiently. Override `OPENAI_DNS_PRIMARY` and
+`OPENAI_DNS_SECONDARY` on the Make command line if the deployment requires
+different approved resolvers.
 
 ## Offline diagnostics only
 

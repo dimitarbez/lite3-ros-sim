@@ -1470,6 +1470,33 @@ roll/pitch `-0.070/1.193 deg`, centered fresh Retroid, STOP false, released
 status, and no SDK owner, lock, or runner. Functional live gates are complete;
 the consolidated operator visual verdict and default-allowlist decision remain.
 
+#### Live OpenAI physical-chat retry — 2026-09-20
+
+The first attempt reached the robot as a Joy user appraisal, but the interactive
+client timed out before a correlated assistant response. The next left unload
+also failed closed at `9.047 N`; the runner landed at `34.453 N`, restored four
+supports, and released without a robot safety fault. Postflight was `1/0/0`,
+battery 48%, errors zero, STOP false, and no owner.
+
+The OpenAI fault was independently reproduced as intermittent DNS resolution
+failure for `api.openai.com` from both WSL and the sidecar. The sidecar launch
+now sets explicit DNS resolvers, while the client wait covers the full provider
+retry/fallback window. Forty-two unit tests and two real API smokes passed before
+the physical retry.
+
+That retry started from `1/0/0`, battery 45%, zero errors, centered fresh
+Retroid, STOP false, and no owner. Its 676-sample baseline was `122.895 N`. With
+the temporary planted-only `neutral,sadness,fear` allowlist, an ordinary
+interactive message streamed a real OpenAI response and correlated assistant
+Fear state (`valence=-0.799`, `arousal=0.748`) through to active
+`fear_planted_flinch_cower`. Status showed four supports, no fault, and the same
+turn ID. A second live OpenAI Neutral turn completed the 1.5-second return and
+0.35-second hold. Seven feedback pauses recovered within the existing watchdog;
+maximum age/gap was `152.142/152.692 ms`. Shutdown released cleanly with no
+robot safety fault. Fresh postflight was `1/0/0`, battery 41%, errors zero,
+roll/pitch `-0.188/1.454 deg`, STOP false, centered fresh Retroid, and no owner,
+lock, or runner.
+
 The chat client timeout observed during this session was traced to the 2 Hz
 heartbeat overwriting the one-shot assistant appraisal in the client's latest
 state slot. The robot had received the state, but the terminal continued

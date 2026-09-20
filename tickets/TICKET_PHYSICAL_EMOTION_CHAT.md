@@ -357,6 +357,45 @@ at SHA-256
 Its fault precedence also ensures a hard battery/attitude/state safety abort is
 not mislabeled as a choreography support-recovery failure.
 
+### Live OpenAI chat retry — 2026-09-20
+
+The first physical OpenAI attempt was not counted as a pass. The user appraisal
+reached the robot as Joy (`turn-000001`, valence `0.7`, arousal `0.6`), but the
+interactive client timed out before a correlated assistant response. Joy safely
+completed left/right unload and landing, then the next left unload retained
+`9.047 N` and failed the unchanged gate. The runner lowered and landed that paw
+at `34.453 N`, restored four supports, and released with no robot safety fault.
+Fresh postflight was state/gait/motion `1/0/0`, battery 48%, errors zero, STOP
+false, and no SDK owner or runner.
+
+Isolation reproduced an `APIConnectionError`: WSL and the sidecar intermittently
+could not resolve `api.openai.com`. The sidecar launch now supplies explicit
+`1.1.1.1` and `8.8.8.8` resolvers, and the interactive client's bounded wait is
+derived from every configured provider attempt plus fallback margin instead of
+ending before that window. All 42 package unit tests passed. Two fresh
+`emotion-openai-live-smoke` runs then passed with real Responses API streams in
+`8.239 s` and `12.015 s`.
+
+The authorized physical retry used the planted-only temporary allowlist
+`neutral,sadness,fear`. Preflight was state/gait/motion `1/0/0`, battery 45%,
+errors zero, centered fresh Retroid, STOP false, and no owner. The 676-sample
+contact baseline measured `122.895 N`. An ordinary interactive message streamed
+a real OpenAI reply and produced the matching assistant appraisal
+`fear`, valence `-0.799`, arousal `0.748`, with
+`chat_backend=openai`. Robot status preserved the same `turn-000001`, requested,
+resolved, and activated `fear_planted_flinch_cower`, four supports, no fault,
+and uninterrupted SDK ownership.
+
+A second live OpenAI turn, `event:neutral`, reported
+`chat_backend=openai`, state sequence `4`, `turn-000002`, and returned Fear over
+the exact 1.5-second recovery plus 0.35-second Neutral hold. Before shutdown,
+status showed `neutral_animal_breath`, four supports, and no fault. All seven
+bounded feedback pauses recovered; maximum feedback age/update gap was
+`152.142/152.692 ms` and maximum pause was `80.016 ms`. Release removed the SDK
+marker with no robot safety fault. Fresh postflight was state/gait/motion
+`1/0/0`, battery 41%, errors zero, roll/pitch `-0.188/1.454 deg`, centered fresh
+Retroid, STOP false, released Neutral status, and no SDK owner, lock, or runner.
+
 ## Acceptance criteria
 
 - The existing chat client influences the same `EmotionEngine` state and

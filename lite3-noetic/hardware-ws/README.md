@@ -414,6 +414,19 @@ centered fresh Retroid, STOP false, released status, and no SDK owner, lock, or
 runner. All functional telemetry gates are closed; only the consolidated
 operator visual verdict and resulting default-allowlist decision remain.
 
+A later live OpenAI retry first exposed intermittent WSL DNS failure and the
+interactive client's shorter wait relative to the configured provider retry
+window. The sidecar now uses explicit resolvers and the client derives a bounded
+deadline that covers that complete window. Two independent live API smokes
+passed before another physical acquisition. The physical retry used only the
+planted `neutral,sadness,fear` temporary allowlist: a normal chat message
+streamed an OpenAI response, printed `chat_backend=openai`, and activated the
+correlated accepted Fear profile with four supports and no fault. A second live
+OpenAI turn returned through the 1.5 + 0.35-second Neutral contract. Release was
+clean; postflight remained `1/0/0`, battery 41%, errors zero, STOP false, and no
+owner or runner. See the cross-emotion ticket for complete failure and retry
+evidence.
+
 The current clean aarch64 runner passed all nine native suites and is installed
 at SHA-256
 `c2723ef4140a1bda88d18d6bfd09494febb2f2dea8d8db3f9d32b1e683a8025a`.
