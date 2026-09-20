@@ -13,6 +13,7 @@ add_executable(test_motion_sdk_contact_estimator
   test_motion_sdk_contact_estimator.cpp)
 add_executable(test_motion_sdk_paw_lift test_motion_sdk_paw_lift.cpp)
 add_executable(test_motion_sdk_anger_stomp test_motion_sdk_anger_stomp.cpp)
+add_executable(test_motion_sdk_fear_guard test_motion_sdk_fear_guard.cpp)
 add_executable(test_motion_sdk_runner_compile
   run_motion_sdk_neutral_breathing.cpp)
 target_include_directories(test_motion_sdk_runner_compile PRIVATE
@@ -29,6 +30,7 @@ add_test(NAME motion_sdk_contact_estimator
   COMMAND test_motion_sdk_contact_estimator)
 add_test(NAME motion_sdk_paw_lift COMMAND test_motion_sdk_paw_lift)
 add_test(NAME motion_sdk_anger_stomp COMMAND test_motion_sdk_anger_stomp)
+add_test(NAME motion_sdk_fear_guard COMMAND test_motion_sdk_fear_guard)
 add_test(NAME motion_sdk_runner_compile
   COMMAND test_motion_sdk_runner_compile --help)
 

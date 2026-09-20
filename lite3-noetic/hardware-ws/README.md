@@ -266,6 +266,44 @@ The normal allowlist remains `neutral`. Do not add `anger` to
 `HARDWARE_COMMISSIONED_EMOTIONS` until a separately authorized live chat
 selection and mid-motion retarget test succeeds.
 
+The Fear candidate is also isolated behind explicit commissioning flags and is
+not part of the normal allowlist. `HARDWARE_FEAR_SINGLE_HOVER_TEST=true` runs
+one guarded front-paw placement after the five-second neutral window;
+`HARDWARE_FEAR_SUITE_TEST=true` runs the complete five-second flinch, recoil,
+alternating 25 mm guards, freeze, and recovery. Use
+`HARDWARE_FEAR_FIRST_PAW=left|right` and keep
+`HARDWARE_FEAR_LIFT_METERS` within `0.015..0.025`.
+
+Fear uses a 0.35-second quintic lower plus a stationary 0.20-second landing
+dwell. It returns the support shift to the guarded recoil pose during lowering
+and requires all four support latches before the mirrored hover. Its 25 mm
+touchdown maxima are about 0.134 m/s and 1.178 m/s², below the separate Fear
+caps and the accepted Anger envelope. A normal allowlisted Fear state uses the
+same lower-first, newest-request, 1.5-second canonical return, and 0.35-second
+exact-neutral hold contract.
+
+The complete local hardware gate and all eight aarch64 suites pass. The current
+redesigned runner SHA-256 is
+`fb3eea752936de30481fb601e3df5e348613a64a9cd691866e539e00587b4797`.
+The first physical candidate was visually rejected by the operator. A stronger
+22 mm flinch, 30 mm recoil, 18 mm crouch, 8 mm widened stance, and 35 mm support
+transfer was then tested in one bounded left-paw run. Its 725-sample baseline
+was 123.871 N, but the front-left paw retained 7.264 N with four supports and
+failed the unload gate. Landing restored four supports at 18.876 N; recovery
+and release completed with no safety fault or feedback pause. Final state was
+`1/0/0`, battery 64%, errors zero, with no runner or owner. See
+[`TICKET_FEAR.md`](../../tickets/TICKET_FEAR.md); keep Fear suite-only until its
+physical telemetry and visual-acceptance gates pass.
+
+`HARDWARE_FEAR_BODY_VISUAL_TEST=true` selects a separate all-feet-planted
+15-second visual diagnostic. It runs three exact five-second cycles comprising
+flinch, recoil, five bounded 8 mm cower transitions, freeze, and exact recovery.
+It does not lift a paw or weaken/replace the failed unload gate. The authorized
+physical run completed all three cycles, restored four supports each time, and
+released with no safety fault. Final state was `1/0/0`, battery 60%, errors
+zero, no runner, and no owner. Treat it only as visual evidence pending the
+operator's verdict.
+
 ## Development-side commands
 
 After the one-time installation, the normal workflow is exactly two terminals:

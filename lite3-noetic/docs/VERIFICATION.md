@@ -745,3 +745,81 @@ This physically validates the canonical-reset repeated commissioning path. It
 does not validate normal chat-driven selection or a retarget received during an
 active paw sequence. The checked-in normal allowlist therefore remains
 `neutral` pending that separately authorized live test.
+
+## Fear implementation and bounded physical trials — 2026-09-20
+
+Fear was implemented as a separate contact-gated state machine rather than the
+older planted fallback. The redesigned explicit five-second suite contains a
+0.35-second flinch, 0.55-second rearward recoil, two 0.55-second low guards
+separated by 0.35-second lowering plus 0.20-second landing dwells, a 0.75-second
+four-foot freeze, and a 1.15-second exact recovery. The 25 mm candidate has
+analytic quintic touchdown maxima of about 0.134 m/s and 1.178 m/s². The second
+hover is impossible until the first landing has restored all four support
+latches.
+
+`make -C lite3-noetic verify-hardware-offline` passed: eight native C++ suites,
+including the complete runner compile harness and Fear bounds/order/retarget
+tests; a clean Release catkin build; 29 Python tests; packet and
+lease/release/crash-watchdog integration; and launch enumeration. A clean
+aarch64 build against the perception computer's installed MotionSDK also passed
+all eight suites. The installed redesign is an ARM aarch64 executable with
+SHA-256
+`c4250e670d2c1a2f543777559fe1a368576bbda15b6c80b9fb94cf3d87ce5c84`;
+the previously accepted Anger binary remains preserved by checksum.
+
+The connected read-only preflight found active core/telemetry/STOP services,
+legacy transmit flags false, no runner, no official/direct-joint ownership
+marker, battery 70%, zero error flags, compatible SDK layout, and level
+attitude. It also found basic state `98`, Retroid `fresh=false` and
+`axes_zero=false`, and joint/IMU readiness false. Those conditions fail the
+exact state-`1`, fresh-centered manual input, and healthy telemetry gates. No
+runner was started, no SDK sender was constructed, and no physical motion
+occurred. Physical Fear commissioning and operator visual acceptance remain
+open; the normal allowlist remains `neutral`.
+
+The operator then explicitly accepted the existing 25% configured battery
+floor for Fear commissioning. A fresh read-only check showed battery 69%, zero
+errors, and normal roll/pitch, so battery was not a blocker. State remained
+`98`, Retroid readiness remained stale/non-centered, and joint/IMU readiness
+remained false. Those independent hard gates were preserved; no SDK acquisition
+or motion occurred.
+
+After the robot returned to state `1`, four first-candidate runs were bounded by
+the same gates. Two 20 mm-transfer left-paw attempts failed unload at 9.644 N
+and 9.617 N. A correctly applied 30 mm transfer passed one single-paw unload at
+5.986 N and landed at 25.865 N, but the complete suite's next baseline retained
+6.531 N and failed before the second paw. All runs landed, recovered, released,
+and reported no safety fault or feedback pause. The operator rejected that
+choreography because it looked nothing like fear.
+
+The replacement used a 22 mm flinch, 30 mm rearward recoil, 18 mm crouch, 8 mm
+widened stance, symmetric 35 mm transfers, longer low freeze, and slower
+recovery. Fresh preflight was state/gait/motion `1/0/0`, battery 65%, zero
+errors, normal attitude, STOP observer active, a 2.144 ms fresh centered Retroid
+record, and no owner. The 725-sample baseline measured 123.871 N. The left-paw
+hover retained 7.264 N and all four support latches, so the unload gate failed
+closed; landing restored four supports at 18.876 N. Recovery and release
+completed with maximum feedback age 7.353 ms, maximum consecutive update gap
+7.703 ms, no pause, and no safety fault. Fresh post-run state was `1/0/0`,
+battery 64%, errors zero, no runner, and no owner. No second paw or complete
+redesigned loop was attempted. Physical and visual acceptance remain open; the
+normal allowlist remains `neutral`.
+
+The operator then requested 15 seconds of Fear. Because the paw unload had
+failed, the runner did not bypass or retry that gate. A separate all-feet-
+planted visual diagnostic was added: three exact five-second cycles, each with
+a 0.35-second flinch, 0.55-second recoil, five 0.45-second 8 mm lateral cower
+transitions, 0.70-second freeze, and 1.15-second exact recovery. Native and
+aarch64 test suites both passed all eight tests. The installed runner SHA-256
+was `fb3eea752936de30481fb601e3df5e348613a64a9cd691866e539e00587b4797`.
+
+Fresh preflight was state/gait/motion `1/0/0`, battery 61%, errors zero, normal
+attitude, active STOP observer, fresh centered Retroid input, STOP false, and no
+owner. All 15 seconds and all three exact recoveries completed. One stale
+`0x0906` interval occurred during the pre-expression stand hold: maximum age
+146.177 ms, 71.017 ms pause, one recovery. The watchdog held the last validated
+command and resumed after 20 fresh samples. There was no safety fault. Final
+state was `1/0/0`, battery 60%, errors zero; all four supports measured
+30.051/26.932/37.012/35.635 N, and no runner or ownership marker remained. This
+validates only the planted visual diagnostic; the paw-unload and operator
+visual-acceptance gates remain open.

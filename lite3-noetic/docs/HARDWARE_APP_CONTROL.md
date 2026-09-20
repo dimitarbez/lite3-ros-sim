@@ -1237,6 +1237,68 @@ chat selection and retargeting during an active paw sequence.
 
 ### Remaining work
 
+#### Fear implementation, visual rejection, and redesign trial — 2026-09-20
+
+The Fear ticket now has a dedicated contact-gated MotionSDK state machine. Its
+five-second candidate combines a bounded symmetric flinch, rearward guarded
+crouch, 25 mm alternating front-paw hovers, confirmed landing between paws, a
+stable freeze, and exact recovery. The lower phase is capped at approximately
+0.134 m/s and 1.178 m/s² and ends with a 0.20-second stationary landing dwell.
+Every lifted-paw phase retains the accepted unload, two-strong-support, 70 N
+aggregate non-target load, target landing, and restored-four-support gates.
+Normal state selection and newest-request retargeting are implemented behind
+the unchanged allowlist.
+
+The complete local gate and eight clean aarch64 suites passed. The current
+installed redesign runner SHA-256 is
+`fb3eea752936de30481fb601e3df5e348613a64a9cd691866e539e00587b4797`.
+A read-only connected preflight then observed no owner, active safety services,
+battery 70%, zero errors, compatible layout, and normal attitude, but basic
+state `98`, stale/non-centered Retroid readiness, and unhealthy joint/IMU
+readiness. The exact state-`1` gate and manual/telemetry gates therefore blocked
+commissioning before SDK acquisition. No command or Fear motion was sent.
+
+- Run the single-hover mode first from fresh state `1` with the operator-approved
+  25% floor, clear level area, and human-held STOP. Battery was 69% at the
+  follow-up preflight and was not a blocker.
+- Only if unload, landing, feedback, tracking, release, and post-state evidence
+  pass, run the complete left/right five-second suite.
+- Keep Fear out of `HARDWARE_COMMISSIONED_EMOTIONS` until the full loop and
+  operator visual verdict pass; normal chat retargeting remains a later live
+  validation gate.
+
+Once state `1` and fresh manual/telemetry readiness returned, the first
+candidate received four bounded trials. Two 20 mm-transfer runs failed
+front-left unload at 9.644 N and 9.617 N. A corrected 30 mm transfer passed one
+single-paw run at 5.986 N, landing at 25.865 N, but a complete suite attempt
+failed its first unload at 6.531 N. The operator then reported that the motion
+looked nothing like fear, so the candidate was rejected independently of the
+contact result. Every trial restored four supports, recovered, released, and
+reported no safety fault or feedback pause.
+
+The redesign sharpened the whole-body cue to a 22 mm flinch, 30 mm sustained
+recoil, 18 mm crouch, 8 mm widened stance, symmetric 35 mm support transfers,
+longer freeze, and slower recovery. It passed the complete local gate and all
+eight clean aarch64 suites. Fresh physical preflight was state/gait/motion
+`1/0/0`, battery 65%, errors zero, level attitude, fresh centered Retroid with
+STOP false, active STOP observer, and no owner. The 725-sample baseline measured
+123.871 N. Its bounded left hover retained 7.264 N and four support latches, so
+the unload gate failed closed. Landing restored four supports at 18.876 N;
+recovery and release completed with no feedback pause or safety fault. Final
+state was `1/0/0`, battery 64%, errors zero, no runner, and no owner. The second
+paw and complete loop were not attempted. Do not retry by weakening the contact
+gate; rework the gesture and transfer, then repeat the single-paw gate first.
+
+The operator subsequently requested 15 seconds of Fear. The failed unload gate
+was not bypassed. Instead, a separate all-feet-planted visual diagnostic ran
+three exact five-second flinch/recoil/cower/freeze/recovery cycles. Fresh
+preflight was `1/0/0`, battery 61%, errors zero, fresh centered Retroid, STOP
+false, active STOP observer, and no owner. All three cycles recovered four
+supports. One 71.017 ms feedback pause recovered during stand hold before the
+Fear window; no safety fault occurred. Final state was `1/0/0`, battery 60%,
+errors zero, all four supports loaded, no runner, and no owner. This diagnostic
+is visual evidence only and cannot close the alternating-paw acceptance gate.
+
 - Keep `direct_joint.takeover_transition_commissioned=false`; do not retry
   measured-anchor takeover from the vendor standing controller.
 - Preserve the commissioned official MotionSDK sitting-to-stand path; never

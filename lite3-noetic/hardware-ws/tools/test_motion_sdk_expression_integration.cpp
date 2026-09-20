@@ -5,6 +5,7 @@
 
 #include "motion_sdk_anger_stomp.hpp"
 #include "motion_sdk_expression_profile.hpp"
+#include "motion_sdk_fear_guard.hpp"
 #include "motion_sdk_shared_state.hpp"
 
 struct FakeSender {
@@ -74,6 +75,29 @@ int main() {
       retarget.emotion(), retarget.valence(), retarget.arousal(), 10.0);
   assert(retarget_engine.active() == "joy");
   assert(retarget_engine.pending().empty());
+
+  // Fear uses the same external-neutral contract, but its own landing gate
+  // prevents the mirrored hover after a request received while the first paw
+  // is raised or lowering.
+  ExpressionEngine fear_engine({"neutral", "fear", "surprise"});
+  fear_engine.Request("fear", -0.8, 0.9, 0.0);
+  fear_engine.Sample(
+      ExpressionEngine::kNeutralReturnSeconds +
+      ExpressionEngine::kNeutralHoldSeconds + 0.001);
+  assert(fear_engine.active() == "fear");
+  FearRetargetTracker fear_retarget(200);
+  FearGuardGate fear_landing_gate;
+  assert(fear_landing_gate.BeginHover());
+  fear_retarget.Observe(true, true, 201, "surprise", 0.5, 1.0);
+  assert(!fear_retarget.may_start_next_hover());
+  fear_landing_gate.CompleteLanding(true, kFearLandingDwellSeconds);
+  assert(fear_landing_gate.next_hover_allowed());
+  assert(!fear_retarget.may_start_next_hover());
+  fear_engine.CompleteExternalNeutralTransition(
+      fear_retarget.emotion(), fear_retarget.valence(),
+      fear_retarget.arousal(), 20.0);
+  assert(fear_engine.active() == "surprise");
+  assert(fear_engine.pending().empty());
 
   // The official owner is the only fake sender instantiated in this harness;
   // Retroid and legacy action senders have no execution path here.

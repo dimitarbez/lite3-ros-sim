@@ -10,7 +10,7 @@
 | Curiosity | [Curiosity lean and paw hover](TICKET_CURIOSITY.md) | Planned |
 | Sadness | [Sadness lowered posture](TICKET_SADNESS.md) | Planned |
 | Disgust | [Disgust recoil](TICKET_DISGUST.md) | Planned |
-| Fear | [Fear crouch and guarded hovers](TICKET_FEAR.md) | Planned |
+| Fear | [Fear crouch and guarded hovers](TICKET_FEAR.md) | First candidate rejected; redesign failed first unload gate |
 | Surprise | [Surprise rise and freeze](TICKET_SURPRISE.md) | Planned |
 | Anger | [Anger controlled front-paw stomps](TICKET_ANGER.md) | Canonical-reset 3-cycle suite passed; live chat retarget remains |
 
@@ -27,6 +27,17 @@ neutral for 0.35 seconds, then start only the newest pending emotion.
   suite completed five seconds of neutral followed by five seconds of joy,
   confirmed unload and landing for both front paws, released SDK ownership,
   and reported no safety fault.
+- **Fear remains unaccepted.** One first-candidate single-hover run passed
+  unload/landing, but the full loop failed its first unload on a new baseline,
+  and the operator said the motion looked nothing like fear. All trials
+  recovered and released safely. A stronger whole-body flinch/recoil redesign
+  passed local and aarch64 tests, but its bounded physical run retained
+  `7.264 N` on the front-left paw and failed the unload gate. It landed,
+  recovered, and released without a safety fault or feedback pause; no second
+  paw was attempted. A separate all-feet-planted 15-second visual diagnostic
+  subsequently completed three exact five-second cycles, restored four
+  supports each time, and released without a safety fault. It does not satisfy
+  the paw-unload or operator-acceptance gates. The normal allowlist is unchanged.
 - **Anger is implemented and its single-placement and alternating physical
   suites passed.** Both paws produced confirmed unload and four-foot landing,
   with clean release and no safety fault. A later 15-second repeat passed two
@@ -38,8 +49,8 @@ neutral for 0.35 seconds, then start only the newest pending emotion.
   paws; it passed all seven aarch64 suites and an authorized three-cycle physical
   run with every landing restoring four supports. Normal chat selection and
   retargeting remain live-unvalidated, so the checked-in allowlist stays
-  neutral-only. Affection, curiosity, sadness, disgust, fear, and surprise remain
-  to be implemented.
+  neutral-only. Affection, curiosity, sadness, disgust, and surprise remain to
+  be implemented; Fear still requires physical telemetry and visual acceptance.
 
 The remaining emotions must be implemented to the same standard as joy:
 recognizable whole-body choreography, explicit phases, IK-generated motion,
@@ -119,10 +130,11 @@ evidence. An emotion is complete only when every item under it is checked.
 ### [Fear](TICKET_FEAR.md)
 
 - [x] Intended physical choreography specified below.
-- [ ] Implement the final phased IK/contact-aware profile.
-- [ ] Add native trajectory, bound, recovery, and transition tests.
-- [ ] Integrate normal emotion-state selection through exact neutral.
-- [ ] Pass aarch64 build/tests and a bounded physical telemetry run.
+- [x] Implement the final phased IK/contact-aware profile.
+- [x] Add native trajectory, bound, recovery, and transition tests.
+- [x] Integrate normal emotion-state selection through exact neutral.
+- [x] Pass local and aarch64 build/tests.
+- [ ] Pass a bounded physical telemetry run.
 - [ ] Receive operator visual acceptance as recognizably fearful.
 
 ### [Surprise](TICKET_SURPRISE.md)
