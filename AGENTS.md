@@ -22,10 +22,11 @@ Use this order when facts conflict:
 
 1. Checked-out code, launch/config files, tests, and superproject gitlinks actually in use.
 2. `lite3-noetic/README.md`, `lite3-noetic/docs/USAGE.md`, `lite3-noetic/docs/WORKFLOW.md`, `lite3-noetic/docs/TROUBLESHOOTING.md`, and `lite3-noetic/ws/Lite3_VMC/src/emotion_bot_ros/README.md` for the implemented simulator workflow.
-3. `lite3-noetic/docs/VERIFICATION.md` for dated verification results. It is historical evidence, not proof that an edited checkout still passes.
-4. `lite3-noetic/docs/HARDWARE_APP_CONTROL.md` for the dated app-protocol investigation and bounded Stand/Sit experiment. It is evidence and design input, not a general hardware runbook.
-5. Searchable manufacturer Markdown and the matching PDFs under `lite3-robot-docs/`.
-6. Upstream Lite3 and EmotionBot documentation only for behavior not represented locally.
+3. `lite3-noetic/hardware-ws/README.md` for the current split-host architecture and `tickets/README.md` plus its per-emotion tickets for current physical-expression status, acceptance gates, and remaining work.
+4. `lite3-noetic/docs/VERIFICATION.md` for dated verification results. It is historical evidence, not proof that an edited checkout still passes.
+5. `lite3-noetic/docs/HARDWARE_APP_CONTROL.md` for dated protocol investigations and physical commissioning evidence. It is an evidence record, not standing permission or proof that later edits remain commissioned.
+6. Searchable manufacturer Markdown and the matching PDFs under `lite3-robot-docs/`.
+7. Upstream Lite3 and EmotionBot documentation only for behavior not represented locally.
 
 Do not bake a remembered submodule SHA into new guidance. Read the current wrapper gitlink and nested repository status. When documenting dated results, state the commit and date actually tested.
 
@@ -40,7 +41,9 @@ Do not bake a remembered submodule SHA into new guidance. Read the current wrapp
 - EmotionBot tracks valence in `[-1, 1]`, arousal in `[0, 1]`, and one of nine discrete emotions. `EmotionEngine` is headless and deterministic by default; the legacy `main.py` CLI still owns plotting and optional direct response generation.
 - Do not install EmotionBot's full pinned dependency set into the ROS Noetic image. The ROS adapter imports the compatible headless core; live OpenAI replies run in the separate Python 3.12 sidecar.
 - Normal chat expression profiles are planted: x/y/yaw stay zero. Joy/surprise hops and anger stomps are bounded simulator-controller actions, not hardware commands or external Gazebo wrenches.
-- The official physical-expression path is separately named and requires initial robot state `1`. It owns MotionSDK continuously for one operator-started chat session, stands once through the vendor sequence, and implements all nine categories as planted HipY/knee/roll/pitch choreography. Only neutral is commissioned by default; true hops and lifted-foot stomps remain disabled stage-two work.
+- The official physical-expression path is separately named and requires initial robot state `1`. It owns MotionSDK continuously for one operator-started session and stands once through the vendor `RobotStateInit -> PreStandUp -> StandUp` sequence.
+- Physical completion is category-specific. Neutral's 3.25-second animal-like breathing is the accepted normal profile. A contact-gated 50 mm alternating front-paw joy gesture is physically accepted only through its explicit bounded commissioning suite; normal validated `joy` state does not yet select it. The other seven final category profiles remain planned, and their older planted profiles are prototypes/fallbacks rather than completion evidence. The checked-in normal allowlist remains `neutral`.
+- Airborne hops, gait/action primitives, external wrenches, torque strikes, and open-loop foot lifts remain out of scope. Low-clearance foot gestures require the accepted IK, torque-derived unload/support/landing gates, safe lowering on failure, and explicit per-category commissioning.
 
 ## Implemented integration boundary
 
@@ -58,7 +61,9 @@ The current state/conversation/action contracts use inspectable JSON on `std_msg
 
 No emotional state may publish motor, joint-effort, UDP, or unbounded velocity commands directly. Anger, surprise, and other actions pass through the same limits, watchdogs, cancellation, and stop behavior as every other state.
 
-On hardware, validated state is copied to a sequence-locked shared record; only `motion_sdk_expression_runner` reads it and sends joints. Every category change returns over 1.5 seconds to exact canonical stand, holds 0.35 seconds, then starts the newest pending category. Link staleness performs that reset and releases control; safety faults bypass it and release immediately. `/emotion_bot/hardware/expression_status` is read-only evidence from the runner. The Retroid height bridge and legacy posture/action nodes are diagnostic-only and must never run concurrently with the official owner.
+On hardware, validated state is copied to a sequence-locked shared record; only `motion_sdk_expression_runner` reads it and sends joints. The final transition contract first finishes lowering and settling any raised paw, returns over 1.5 seconds to exact canonical stand, holds 0.35 seconds, and then starts only the newest pending category. The planted engine implements its portion of that contract; retargeting the accepted joy paw state machine through normal chat is still pending. Link staleness performs a safe reset and release; STOP and safety faults bypass conversational timing and release immediately. `/emotion_bot/hardware/expression_status` is read-only evidence from the runner.
+
+The torque-derived contact estimate is a guarded input, not a general permission to lift a foot. Its gate is enabled only by the explicit accepted paw suite until the normal joy integration and transition tests are complete. The Retroid height bridge and legacy posture/action nodes are diagnostic-only and must never run concurrently with the official owner.
 
 ## Development workflow
 
@@ -107,6 +112,9 @@ Source `/opt/ros/noetic/setup.bash` and `devel/setup.bash` in raw commands that 
 - Make focused changes in the active Noetic fork and EmotionBot checkout. Keep `lite3_vmc_upstream` clean.
 - Do not pull over local changes. `make bootstrap` may fast-forward a clean attached active checkout, so inspect status first.
 - Preserve topic types and coordinate semantics. Document every new topic, parameter, node, launch file, Make target, and operator-visible recovery path.
+- Keep the separate physical package under `lite3-noetic/hardware-ws`; never copy it into or modify vendor `~/lite_cog`, `qnx2ros`, `jy_exe`, or their configuration. Keep emotional reasoning on the development computer and the sole safety/trajectory owner on the perception computer.
+- Keep `tickets/README.md` and the relevant per-emotion ticket aligned with implementation and evidence. Offline tests, a planted fallback, joint movement, or a successful explicit suite do not prove normal chat integration or commission another category.
+- Preserve one exclusive hardware sender. The official MotionSDK runner, Retroid diagnostic bridge, and legacy posture/action nodes are mutually exclusive paths.
 - Keep English `emotion-bot/README.md` and Macedonian `emotion-bot/README.mkd` aligned when changing shared user-facing behavior.
 - Never commit API keys, `.env`, credentials, model caches, tokens, packet captures, generated plots, build output, or large downloaded artifacts.
 - Avoid model loading during ROS package import. Mock network/OpenAI calls; ordinary tests must not require a secret, paid call, GUI, microphone, physical robot, or internet.
@@ -139,7 +147,7 @@ The simulation milestone is complete only when one documented launch sequence br
 
 ## Hardware boundary
 
-Hardware deployment requires explicit current-task direction and a fresh review of `lite3-noetic/docs/HARDWARE_APP_CONTROL.md`, the Motion Development manual, Motion Host Communication Interface, Perception Development manual, and the exact model's user manual. The 2026-09-19 record proves only the conditions and bounded Stand/Sit test described there; do not generalize it to walking, pose expression, concurrent controllers, STOP recovery, or direct joint/torque control.
+Hardware deployment requires explicit current-task direction and a fresh review of `tickets/README.md`, `lite3-noetic/hardware-ws/README.md`, `lite3-noetic/docs/HARDWARE_APP_CONTROL.md`, the Motion Development manual, Motion Host Communication Interface, Perception Development manual, and the exact model's user manual. Dated records prove only their named checkout, command path, conditions, telemetry, and operator observation. Do not generalize the Stand/Sit test, accepted neutral loop, or bounded joy suite to normal chat integration, another category, walking, airborne motion, concurrent controllers, or torque control.
 
 The tested full Lite3 Android app is a high-level, non-ROS motion-host controller. It is not the generic DEEP Robotics gamepad-forwarding app, and neither app supplies this workspace's Gazebo `/joy` or `/cmd_vel` path. Do not reuse the generic gamepad packet format for the motion host or assume status telemetry replies to the command sender; follow the inspected hardware note and do not reconfigure the deployed telemetry target ad hoc.
 
