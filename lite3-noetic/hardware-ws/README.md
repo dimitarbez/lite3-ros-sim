@@ -356,7 +356,8 @@ failed the unload gate. Landing restored four supports at 18.876 N; recovery
 and release completed with no safety fault or feedback pause. Final state was
 `1/0/0`, battery 64%, errors zero, with no runner or owner. See
 [`TICKET_FEAR.md`](../../tickets/TICKET_FEAR.md); keep Fear suite-only until its
-physical telemetry and visual-acceptance gates pass.
+paw-hover telemetry gates pass. That discarded candidate does not replace the
+accepted all-feet-planted Fear animation documented below.
 
 `HARDWARE_FEAR_BODY_VISUAL_TEST=true` selects a separate all-feet-planted
 15-second visual diagnostic. It runs three exact five-second cycles comprising
@@ -364,8 +365,10 @@ flinch, recoil, five bounded 8 mm cower transitions, freeze, and exact recovery.
 It does not lift a paw or weaken/replace the failed unload gate. The authorized
 physical run completed all three cycles, restored four supports each time, and
 released with no safety fault. Final state was `1/0/0`, battery 60%, errors
-zero, no runner, and no owner. Treat it only as visual evidence pending the
-operator's verdict.
+zero, no runner, and no owner. The operator subsequently confirmed that the
+Fear animation worked correctly on the robot and visually accepted it. Keep it
+out of the normal allowlist only until normal chat selection and retargeting
+are physically validated.
 
 ## Development-side commands
 

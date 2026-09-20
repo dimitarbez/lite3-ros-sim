@@ -774,8 +774,9 @@ attitude. It also found basic state `98`, Retroid `fresh=false` and
 `axes_zero=false`, and joint/IMU readiness false. Those conditions fail the
 exact state-`1`, fresh-centered manual input, and healthy telemetry gates. No
 runner was started, no SDK sender was constructed, and no physical motion
-occurred. Physical Fear commissioning and operator visual acceptance remain
-open; the normal allowlist remains `neutral`.
+occurred. At that preflight stage, physical Fear commissioning and operator
+visual acceptance remained open; the later planted run below closed those
+physical-animation gates. The normal allowlist remains `neutral`.
 
 The operator then explicitly accepted the existing 25% configured battery
 floor for Fear commissioning. A fresh read-only check showed battery 69%, zero
@@ -802,8 +803,9 @@ closed; landing restored four supports at 18.876 N. Recovery and release
 completed with maximum feedback age 7.353 ms, maximum consecutive update gap
 7.703 ms, no pause, and no safety fault. Fresh post-run state was `1/0/0`,
 battery 64%, errors zero, no runner, and no owner. No second paw or complete
-redesigned loop was attempted. Physical and visual acceptance remain open; the
-normal allowlist remains `neutral`.
+redesigned loop was attempted. At that stage physical and visual acceptance
+remained open; the later planted run below supplied the accepted Fear animation.
+The normal allowlist remains `neutral`.
 
 The operator then requested 15 seconds of Fear. Because the paw unload had
 failed, the runner did not bypass or retry that gate. A separate all-feet-
@@ -821,5 +823,7 @@ owner. All 15 seconds and all three exact recoveries completed. One stale
 command and resumed after 20 fresh samples. There was no safety fault. Final
 state was `1/0/0`, battery 60%, errors zero; all four supports measured
 30.051/26.932/37.012/35.635 N, and no runner or ownership marker remained. This
-validates only the planted visual diagnostic; the paw-unload and operator
-visual-acceptance gates remain open.
+validates the physical Fear animation. The operator subsequently confirmed that
+it worked correctly on the robot and visually accepted it. Normal chat
+selection and retargeting remain unvalidated, so the normal allowlist stays
+`neutral`.

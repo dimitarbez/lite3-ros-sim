@@ -96,7 +96,8 @@ STOP and safety faults retain immediate verified release behavior.
   that variant.
 - [x] Obtain operator acceptance as sadness, distinct from neutral breathing.
 - [ ] Select the accepted planted bow from normal validated `sadness` state and
-  live-test retargeting before changing the allowlist.
+  live-test retargeting before changing the allowlist, as tracked by the
+  [chat-driven physical emotion integration ticket](TICKET_PHYSICAL_EMOTION_CHAT.md).
 
 ## Acceptance criteria
 

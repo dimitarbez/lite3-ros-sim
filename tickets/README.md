@@ -1,5 +1,17 @@
 # Lite3 Physical Emotion Tickets
 
+## Cross-emotion integration ticket
+
+| Scope | Ticket | Current state |
+| --- | --- | --- |
+| Emotion chat -> EmotionEngine -> accepted physical reactions | [Chat-driven physical emotion reactions](TICKET_PHYSICAL_EMOTION_CHAT.md) | Planned; Neutral is normal, Joy/Sadness/Fear/Anger chat validation remains, other categories fall back to Neutral |
+
+The integration ticket owns the end-to-end conversational selector: it preserves
+the actual EmotionEngine category and chooses an operator-accepted physical
+reaction, with explicit neutral fallback for categories that do not yet have
+one. The per-emotion tickets below continue to own choreography, safety gates,
+physical evidence, and operator visual acceptance.
+
 ## Ticket index
 
 | Emotion | Ticket | Current state |
@@ -10,7 +22,7 @@
 | Curiosity | [Curiosity lean and paw hover](TICKET_CURIOSITY.md) | Planned |
 | Sadness | [Sadness lowered posture](TICKET_SADNESS.md) | Planted bow accepted; normal chat integration pending |
 | Disgust | [Disgust recoil](TICKET_DISGUST.md) | Planned |
-| Fear | [Fear crouch and guarded hovers](TICKET_FEAR.md) | First candidate rejected; redesign failed first unload gate |
+| Fear | [Fear crouch and guarded reaction](TICKET_FEAR.md) | Physical animation implemented and operator-accepted; normal chat integration pending |
 | Surprise | [Surprise rise and freeze](TICKET_SURPRISE.md) | Planned |
 | Anger | [Anger controlled front-paw stomps](TICKET_ANGER.md) | Canonical-reset 3-cycle suite passed; live chat retarget remains |
 
@@ -38,7 +50,7 @@ neutral for 0.35 seconds, then start only the newest pending emotion.
   retained four supports through all six heaves, recovered, and released with
   no safety fault. Normal chat selection remains unvalidated, so the normal
   allowlist is unchanged.
-- **Fear remains unaccepted.** One first-candidate single-hover run passed
+- **Fear is implemented and operator-accepted.** One first-candidate single-hover run passed
   unload/landing, but the full loop failed its first unload on a new baseline,
   and the operator said the motion looked nothing like fear. All trials
   recovered and released safely. A stronger whole-body flinch/recoil redesign
@@ -47,8 +59,10 @@ neutral for 0.35 seconds, then start only the newest pending emotion.
   recovered, and released without a safety fault or feedback pause; no second
   paw was attempted. A separate all-feet-planted 15-second visual diagnostic
   subsequently completed three exact five-second cycles, restored four
-  supports each time, and released without a safety fault. It does not satisfy
-  the paw-unload or operator-acceptance gates. The normal allowlist is unchanged.
+  supports each time, and released without a safety fault. The operator
+  confirmed that the final Fear animation worked correctly on the robot and
+  visually accepted it. Normal chat selection and retargeting remain
+  unvalidated, so the normal allowlist is unchanged.
 - **Anger is implemented and its single-placement and alternating physical
   suites passed.** Both paws produced confirmed unload and four-foot landing,
   with clean release and no safety fault. A later 15-second repeat passed two
@@ -61,8 +75,8 @@ neutral for 0.35 seconds, then start only the newest pending emotion.
   run with every landing restoring four supports. Normal chat selection and
   retargeting remain live-unvalidated, so the checked-in allowlist stays
   neutral-only. Affection, curiosity, disgust, and surprise remain to be
-  implemented; Fear still requires operator visual acceptance, while Sadness
-  still requires normal chat selection and retarget validation.
+  implemented; Fear and Sadness still require normal chat selection and
+  retarget validation.
 
 The remaining emotions must be implemented to the same standard as joy:
 recognizable whole-body choreography, explicit phases, IK-generated motion,
@@ -151,8 +165,10 @@ evidence. An emotion is complete only when every item under it is checked.
 - [x] Add native trajectory, bound, recovery, and transition tests.
 - [x] Integrate normal emotion-state selection through exact neutral.
 - [x] Pass local and aarch64 build/tests.
-- [ ] Pass a bounded physical telemetry run.
-- [ ] Receive operator visual acceptance as recognizably fearful.
+- [x] Pass a bounded physical telemetry run.
+- [x] Receive operator visual acceptance as recognizably fearful.
+- [ ] Select the accepted Fear animation through normal chat and validate
+  retargets.
 
 ### [Surprise](TICKET_SURPRISE.md)
 
@@ -182,6 +198,9 @@ evidence. An emotion is complete only when every item under it is checked.
 - [x] Exact-neutral transition behavior and timing are specified.
 - [x] The existing continuous runner supports one pending target and exact
   neutral transitions for the planted profile engine.
+- [ ] Complete the end-to-end [chat-driven physical emotion integration
+  ticket](TICKET_PHYSICAL_EMOTION_CHAT.md), including accepted-profile routing
+  and observable neutral fallback for unimplemented categories.
 - [ ] Extend that coordinator to every final IK/contact-aware profile, including
   an emotion request received while a paw is raised.
 - [ ] Pass automated rapid-retarget, same-category, stale-link, STOP, and fault
@@ -240,6 +259,9 @@ wrenches remain zero/unused.
 | --- | --- | --- |
 | neutral | Slow animal-like breathing with all four paws planted | Accepted |
 | joy | Rear/lateral support transfer, 50 mm front-left paw lift and gentle landing, then front-right, within one five-second loop | Accepted |
+| sadness | Front-only 48 mm planted bow with slow heaves and exact recovery | Accepted |
+| fear | Planted flinch, recoil, lateral cower, guarded freeze, and exact recovery | Accepted |
+| anger | Canonical-reset alternating controlled front-paw placements | Accepted |
 
 The joy implementation is the reference pattern for all remaining work:
 baseline in four-foot stand, transfer load, command a tested IK trajectory,
@@ -257,21 +279,11 @@ commissioned until live evidence and operator acceptance are recorded.
 - **Curiosity:** an asymmetric side lean with a single inquisitive front-paw
   hover, brief hold, side change on the next loop, and slow recovery. With no
   actuated head, asymmetry and timing must carry the expression.
-- **Sadness:** a long, low, slow crouch with reduced body height, subdued roll,
-  and a delayed single-paw reposition/hover if contact tests support it. No
-  bounce or sharp landing.
 - **Disgust:** a clear rearward/sideways recoil followed by one front-paw
   withdrawal and guarded return. It must remain stationary in world position.
-- **Fear:** a fast but bounded crouch-and-recoil followed by small alternating
-  weight shifts or low paw hovers. No high-frequency joint chatter and no loss
-  of the support/load gate.
 - **Surprise:** a quick compression/rise with a conspicuous front-body lift or
   sequential front-paw reaction, followed by a short freeze and controlled
   landing. No airborne four-foot jump in this ticket.
-- **Anger:** deliberate alternating front-paw stomps: unload one paw, lift it
-  with the same contact-gated machinery as joy, lower it firmly but within a
-  bounded velocity/acceleration profile, confirm landing, then alternate. This
-  is expressive placement, not an impact or torque strike.
 
 Do not accept a profile merely because joints moved. Each must be visually
 recognizable as its intended emotion and measurably distinct from neutral and

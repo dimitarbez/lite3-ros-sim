@@ -94,7 +94,8 @@ hold/release behavior.
 - [x] Obtain operator acceptance as anger without harsh impact.
 - [x] Revalidate the canonical-reset three-cycle suite on hardware.
 - [ ] Validate normal chat selection and retargeting on hardware before adding
-  `anger` to the normal allowlist.
+  `anger` to the normal allowlist, as tracked by the
+  [chat-driven physical emotion integration ticket](TICKET_PHYSICAL_EMOTION_CHAT.md).
 
 ## Acceptance criteria
 

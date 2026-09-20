@@ -140,6 +140,9 @@ preemption was separately observed working during this commissioning effort.
 
 ## Remaining integration work
 
+The cross-emotion selector and live chat acceptance are tracked by the
+[chat-driven physical emotion integration ticket](TICKET_PHYSICAL_EMOTION_CHAT.md).
+
 - [ ] Make the accepted paw trajectory selectable by normal validated joy state in
   the continuous chat session, using the same exact-neutral transition engine.
 - [ ] Preserve the explicit bounded suite as a regression/commissioning mode

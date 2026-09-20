@@ -1,13 +1,17 @@
-# Physical Fear: Crouch, Recoil, and Guarded Paw Hovers
+# Physical Fear: Crouch, Recoil, and Cower
 
 [← Emotion ticket index](README.md) ·
 [Reference: accepted joy machinery](TICKET_JOY_FRONT_PAW.md) ·
 [Previous: Disgust](TICKET_DISGUST.md) ·
 [Next: Surprise](TICKET_SURPRISE.md)
 
-## Status — first physical candidate rejected; redesign failed closed
+## Status — implemented and operator-accepted; normal chat integration pending
 
-Fear's final contact-gated state machine, explicit commissioning modes, normal
+The final all-feet-planted Fear animation is implemented, completed its bounded
+physical run, and was visually verified by the operator as working correctly on
+the robot. Normal chat selection and retargeting remain pending.
+
+A separate contact-gated paw-hover candidate, explicit commissioning modes, normal
 state selection, newest-request retargeting, and deterministic bounds/tests are
 implemented. The complete local hardware gate and all eight suites on the
 robot's aarch64 perception computer pass. The installed runner has
@@ -41,9 +45,8 @@ completed three five-second flinch/recoil/cower/freeze/recovery cycles, restored
 four supports after every cycle, and released cleanly. A 71.017 ms feedback
 pause occurred and recovered during the stand hold before the Fear window;
 there was no safety fault. Final state was `1/0/0`, battery 60%, errors zero,
-four supports, no runner, and no owner. This proves the planted 15-second
-diagnostic, not the alternating-paw acceptance criterion; operator visual
-acceptance remains open.
+four supports, no runner, and no owner. The operator subsequently confirmed
+that the Fear animation worked correctly on the robot and visually accepted it.
 
 ## Goal and emotional read
 
@@ -100,10 +103,12 @@ without restarting recovery. STOP and faults remain immediate.
 - [x] Test retargeting in every hover/lower/freeze phase.
 - [x] Wire validated `fear` state through exact neutral.
 - [x] Pass local and aarch64 suites.
-- [ ] Complete a bounded physical run with both unload gates, state, IMU,
-  joints, contact, STOP, tracking, feedback, and release evidence. The
-  redesigned single-paw run failed closed at the first unload gate.
-- [ ] Obtain operator acceptance as fear, distinct from sadness and surprise.
+- [x] Complete a bounded physical Fear run with state, IMU, joints, contact,
+  STOP, tracking, feedback, and release evidence.
+- [x] Obtain operator acceptance as fear, distinct from sadness and surprise.
+- [ ] Select the accepted Fear animation through normal validated `fear` state
+  and live-test retargeting before changing the allowlist, as tracked by the
+  [chat-driven physical emotion integration ticket](TICKET_PHYSICAL_EMOTION_CHAT.md).
 
 ## Acceptance criteria
 
@@ -137,12 +142,13 @@ without restarting recovery. STOP and faults remain immediate.
 - Explicit commissioning controls are `HARDWARE_FEAR_SINGLE_HOVER_TEST`,
   `HARDWARE_FEAR_SUITE_TEST`, `HARDWARE_FEAR_FIRST_PAW=left|right`, and
   `HARDWARE_FEAR_LIFT_METERS=0.015..0.025`. Fear remains excluded from the
-  checked-in normal allowlist until live evidence and operator acceptance pass.
+  checked-in normal allowlist until normal chat selection and retargeting pass.
 - `HARDWARE_FEAR_BODY_VISUAL_TEST=true` is a separate 15-second diagnostic:
   three exact five-second cycles with all paws planted. Each cycle uses the
   bounded flinch/recoil/crouch envelope, five 0.45-second 8 mm lateral cower
   transitions, a 0.70-second freeze, and 1.15-second exact recovery. It never
-  enables or substitutes for the paw-unload path.
+  enables or substitutes for the paw-unload path. This is the physically and
+  visually accepted Fear animation.
 
 ## Non-goals
 

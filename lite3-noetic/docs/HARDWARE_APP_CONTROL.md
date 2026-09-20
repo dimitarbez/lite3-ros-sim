@@ -1390,7 +1390,9 @@ false, active STOP observer, and no owner. All three cycles recovered four
 supports. One 71.017 ms feedback pause recovered during stand hold before the
 Fear window; no safety fault occurred. Final state was `1/0/0`, battery 60%,
 errors zero, all four supports loaded, no runner, and no owner. This diagnostic
-is visual evidence only and cannot close the alternating-paw acceptance gate.
+was subsequently confirmed by the operator as a correct, working physical Fear
+animation. Normal chat selection and retargeting remain separate live-validation
+gates.
 
 - Keep `direct_joint.takeover_transition_commissioned=false`; do not retry
   measured-anchor takeover from the vendor standing controller.
