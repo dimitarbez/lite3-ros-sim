@@ -594,3 +594,154 @@ make -C lite3-noetic emotion-animation-gazebo-test
 | affection | Broad, slow warm sway on a 2.75-second loop. |
 
 The planted sweep rejects a profile unless it produces measurable Gazebo torso or joint movement in both its entrance and idle phases, maintains a standing torso, keeps x/y/yaw at zero, stays within the posture command and no-drift envelopes, and settles to zero on disable/shutdown. The normal runtime keeps the dynamic model centered with bounded simulator-only recovery rather than the unstable Lite3 walk gait.
+## Anger controlled-placement implementation — 2026-09-20
+
+The Anger ticket's explicit commissioning path was implemented without adding
+`anger` to the normal hardware allowlist. It uses an 8 mm low brace, 6 mm
+per-side stance widening, the accepted joy support transfers, a 35 mm paw
+target, a 0.35-second quintic lowering, a 0.25-second zero-lift landing dwell,
+and four-foot recovery. Its analytic maximum Cartesian lowering speed and
+acceleration are 0.1875 m/s and approximately 1.65 m/s^2. A separate gate
+prevents the second paw from starting before confirmed four-foot landing and
+the complete dwell.
+
+`make -C lite3-noetic verify-hardware-offline` passed: six ROS-independent C++
+suites, a clean Release catkin build, 29 Python tests, the packet test, the
+lease/release/crash-watchdog integration test, and launch enumeration. The same
+six native suites and the official runner compiled and passed on the aarch64
+perception computer against its installed MotionSDK. The installed candidate
+runner SHA-256 is
+`2501f3bbb819c636a04f599b9630332ffd3a2d1d79b71a6d6d84116828e1e27d`;
+the accepted joy binary was retained as a checksum-named backup.
+
+A no-command preflight then observed state/gait/motion `98/0/0`, battery `91%`,
+zero error flags, a compatible SDK layout, normal attitude, and no official or
+legacy ownership marker. Because only exact sitting state `1` permits
+acquisition, the runner rejected the attempt before constructing a sender. No
+MotionSDK acquisition or Anger movement occurred in that preflight.
+
+After the operator restored exact state `1` and reconfirmed the clear area and
+STOP readiness, the bounded single left-front placement ran with a 75% battery
+floor. Its 753-sample baseline was valid at 120.512 N. Unload was confirmed at
+4.116 N with two strong supports; landing was confirmed at 17.987 N with four
+supports after the 0.25-second dwell. Feedback age/update-gap maxima were
+8.017/8.624 ms with `0/0` pauses/recoveries. The runner reported no safety
+fault, released its marker, and left the robot at state/gait/motion `1/0/0`,
+battery 90%, zero errors, STOP false, and centered axes.
+
+The complete left-then-right loop then ran from a fresh state-`1` preflight. Its
+706-sample baseline was valid at 120.681 N. Front-left unload/landing were
+3.992/18.101 N; front-right unload/landing were 0.603/14.071 N. Both landings
+restored all four supports, so the second-paw gate passed only after the first
+dwell. A 148.120 ms feedback-age event occurred in the preceding neutral
+window; the runner froze and recovered after 20 fresh frames before Anger began.
+Neither placement paused. Final feedback statistics reported one pause and one
+recovery, 148.120/148.250 ms maximum age/update gap, no safety fault, and clean
+release. Post-run state remained `1/0/0`, battery 89%, zero errors, STOP false,
+centered axes, active services, and no owner. Normal chat/retarget integration
+remained pending.
+
+The operator then requested 15 seconds of continuous Anger. A hard-capped
+three-cycle commissioning option was compiled and all six suites passed locally
+and on aarch64. Installed runner SHA-256 was
+`1bedfbf71d30a8dae52d403b8ed4eb346ef3e5835be549cd74a3e8ec553f597c`.
+The session baseline was valid with 702 samples and 121.990 N. Cycles 1 and 2
+passed both unload/landing pairs. Cycle 3 passed the left pair and right unload,
+but its final right landing ended at 13.133 N with only three estimated supports
+re-latched. The required four-support landing check therefore failed.
+
+The runner completed hold/recovery, released ownership, reported no safety
+fault, and exited nonzero as designed. Feedback had zero pauses/recoveries with
+82.340 ms maximum age and 11.489 ms maximum consecutive update gap. Post-run
+state was `1/0/0`, battery 87%, errors zero, STOP false, centered axes, active
+services, and no owner. This is a failed endurance acceptance result and must
+not be converted into a pass by weakening the contact gate.
+
+After observing the run, the operator reported that the motion looked good.
+This supplies positive visual acceptance of the Anger choreography. It does not
+change the failed endurance result: the third-cycle landing issue and normal
+chat/retarget integration remain open.
+
+## Anger landing and chat-path hardening — 2026-09-20
+
+No robot connection or command was used for this follow-up. The third-cycle
+failure was addressed without changing the load thresholds: after each
+0.25-second zero-lift dwell, the planted body now recenters over 0.30 seconds and
+only then evaluates the same four-support latch. A following paw always starts
+from center, so an unloading offset cannot accumulate across paws or loops.
+
+The normal expression loop now routes an allowlisted `anger` state to the
+contact-gated paw state machine rather than the planted prototype. It observes
+new sequence-locked chat state throughout every phase. A new category suppresses
+the next stomp, finishes any current lowering/dwell/re-latch, returns to exact
+stand over 1.5 seconds, holds it for 0.35 seconds, and activates only the newest
+pending commissioned category. A stale link performs the same safe reset and
+then releases. STOP and hard faults retain immediate release semantics. The
+checked-in allowlist remains `neutral`.
+
+`make -C lite3-noetic verify-hardware-offline` passed with seven native C++
+tests, including raised-paw and placement retarget cases plus compilation of the
+complete runner against SDK-shaped stubs; a clean Release catkin build; 29 Python
+tests; and the protocol/lease/graceful-release/crash-watchdog integration test.
+At that stage the hardened source had not been compiled against the robot's
+actual aarch64 MotionSDK, deployed, or physically revalidated; the earlier
+checksum and endurance failure therefore remained the current live evidence.
+
+### First hardening live result and canonical-reset follow-up
+
+With fresh operator confirmation of a clear level area and Retroid STOP
+readiness, the x/y-recenter revision was clean-built in a new aarch64 temporary
+directory against the installed MotionSDK. All seven tests passed, the installed
+artifact matched the clean artifact, and its SHA-256 was
+`37793e3eb35f7dbc8e99bbd0d21619a74b0a52558572dea315e387c85169b3ee`.
+The checked-in runtime allowlist remained `neutral`; only the explicit bounded
+three-cycle commissioning mode was selected.
+
+The baseline was valid with 751 samples and 120.606 N total load. Cycle 1 passed
+left unload/landing at 4.298/19.680 N and right at 0.396/11.317 N, each restoring
+four supports. Cycle 2 passed left at 1.648/14.527 N. Its right paw unloaded to
+0.001 N and landed at 13.066 N, but only three supports were latched after the
+0.30-second x/y recenter. The runner failed closed, did not start cycle 3,
+completed recovery, and released SDK ownership. It reported no safety fault and
+no feedback pause; maximum feedback age/consecutive update gap was
+49.891/50.736 ms.
+
+Fresh post-release evidence was state/gait/motion `1/0/0`, battery 79%, errors
+zero, roll/pitch `0.346/0.399 deg`, STOP false, fresh centered axes, no runner or
+ownership marker, and four recovered loads at
+23.327/26.329/40.331/33.006 N. No retry was made.
+
+That result disproves the assumption that x/y recentering alone is sufficient.
+The next local-only revision instead returns body shift, brace, and stance width
+to exact canonical stand over 1.0 second, holds it for 0.35 seconds, and then
+applies the unchanged four-support latch. It also logs all four forces at every
+landing. Seven native tests, including the full-runner compile harness, pass.
+At this point in the sequence it was not installed and had no physical evidence.
+
+### Canonical-reset three-cycle physical result
+
+After a new explicit authorization, the canonical-reset revision clean-built
+against the actual aarch64 MotionSDK and passed all seven suites. The installed
+artifact matched SHA-256
+`a77433ace5afb56a4bbd204df28c167cf7d46022d2b3155568086ac78fdd630c`.
+The normal category allowlist remained `neutral`; the run used only the explicit
+bounded three-cycle suite, a 75% battery floor, left-paw-first order, and the
+35 mm target.
+
+Its 722-sample baseline measured 121.912 N. All six placements passed the
+unchanged unload, support, touchdown, and restored-four-support gates:
+
+- cycle 1 left `3.901/29.767 N`, right `1.386/29.509 N`;
+- cycle 2 left `1.849/26.950 N`, right `0.466/29.667 N`;
+- cycle 3 left `2.085/26.949 N`, right `0.160/29.563 N`.
+
+The runner reported no safety fault, feedback pause, or recovery. Maximum
+feedback age/consecutive update gap was `12.291/10.382 ms`; the ownership marker
+was absent after release. Fresh post-run state was `1/0/0`, battery 77%, errors
+zero, roll/pitch `0.392/0.204 deg`, STOP false, fresh centered axes, no runner,
+and four loaded feet at `24.131/30.575/43.193/38.545 N`.
+
+This physically validates the canonical-reset repeated commissioning path. It
+does not validate normal chat-driven selection or a retarget received during an
+active paw sequence. The checked-in normal allowlist therefore remains
+`neutral` pending that separately authorized live test.

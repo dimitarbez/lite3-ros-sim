@@ -128,6 +128,24 @@ int main() {
   assert(engine.filtered_arousal() < filtered_arousal_before);
   assert(engine.filtered_arousal() > 0.4);
 
+  // A lifted-paw runtime performs its own 1.5 s neutral return and 0.35 s
+  // exact hold. Handoff must enter only the newest target without scheduling
+  // a duplicate reset movement.
+  engine.CompleteExternalNeutralTransition("joy", 0.7, 0.8, 2.8);
+  assert(engine.requested() == "joy");
+  assert(engine.active() == "joy");
+  assert(engine.pending().empty());
+  assert(engine.phase() == "profile");
+  const ExpressionSample external_handoff = engine.Sample(2.8);
+  assert(Near(external_handoff.position.compression, 0.0));
+  assert(Near(external_handoff.velocity.compression, 0.0));
+
+  ExpressionEngine anger_only({"neutral", "anger"});
+  anger_only.CompleteExternalNeutralTransition("joy", 0.7, 0.8, 1.0);
+  assert(anger_only.requested() == "joy");
+  assert(anger_only.active() == "neutral");
+  assert(anger_only.phase() == "profile");
+
   engine.Request("fear", -0.8, 1.0, 3.0);
   engine.LinkStale(3.2);
   assert(engine.phase() == "neutral_return");

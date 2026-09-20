@@ -187,16 +187,17 @@ runner is its only actuator consumer. Runner status is copied back through
 `/dev/shm/emotion_bot_lite3_expression_status` and published read-only as JSON
 schema `1.0` on `/emotion_bot/hardware/expression_status`.
 
-All nine planted profiles are compiled and tested, but the runtime allowlist is
-`neutral` by default. Set `HARDWARE_COMMISSIONED_EMOTIONS` only to categories
-with recorded physical evidence. A category switch always returns to exact
-stand for 1.5 seconds and holds it for 0.35 seconds; rapid changes replace one
-pending target. A planted front-shoulder experiment did not read visually as
+All nine planted fallback profiles are compiled and tested, but the runtime
+allowlist is `neutral` by default. Set `HARDWARE_COMMISSIONED_EMOTIONS` only to
+categories with complete physical evidence. Ordinary planted category switches
+return to exact stand for 1.5 seconds and hold it for 0.35 seconds; rapid changes
+replace one pending target. The allowlisted Anger path instead uses its bounded
+lifted-paw state machine and completes paw landing/re-latch before that same
+neutral contract. A planted front-shoulder experiment did not read visually as
 front-paw stomping and was reverted; joy retains its previously accepted
-stage-one profile. True airborne hops and lifted-foot stomps are not
-implemented. The live SDK-owned feedback currently reports zero in every
-contact channel while standing, so it cannot provide the required
-unload/contact/landing gate.
+stage-one profile. True airborne hops and forceful strikes remain unimplemented.
+The live SDK-owned feedback reports zero in the vendor contact array, so lifted
+paw gates use the separate guarded torque-derived estimate below.
 
 The runner now also computes a **read-only torque-derived foot-load estimate**
 from the joint positions and torques in the same official SDK feedback. It uses
@@ -213,6 +214,57 @@ standing sample at `23.44/24.34/31.23/35.73 N` (total `114.74 N`, versus
 singular, weak-baseline, unload, and landing cases. See
 [`TICKET_JOY_FRONT_PAW.md`](../../tickets/TICKET_JOY_FRONT_PAW.md) for the
 separate calibration and lifted-paw movement plan.
+
+The Anger candidate is isolated behind explicit commissioning flags and is not
+part of the normal category allowlist. `HARDWARE_ANGER_SINGLE_STOMP_TEST=true`
+runs five seconds of accepted neutral breathing followed by one 35 mm
+front-paw controlled placement. `HARDWARE_ANGER_SUITE_TEST=true` runs the full
+left/right sequence, and `HARDWARE_ANGER_FIRST_PAW=left|right` selects its
+order. Each placement uses a 0.35-second quintic lowering and a 0.25-second
+stationary landing dwell. The commissioned implementation then returns shift,
+brace, and stance width to canonical stand over 1.0 second and holds it for
+0.35 seconds. The unchanged four-support gate is evaluated after that support
+reset, and the second placement cannot start before it passes. See
+[`TICKET_ANGER.md`](../../tickets/TICKET_ANGER.md). The 2026-09-20 bounded
+single-placement and complete alternating physical suites both passed with
+confirmed unload and four-foot landing, no safety fault, and clean release.
+The operator subsequently reported that the motion looked good, providing
+visual acceptance. The source now has an offline-tested Anger selection
+and newest-request retarget path through 1.5 seconds of recovery plus a
+0.35-second exact-neutral hold. Normal chat selection remains disabled pending
+physical validation of that chat-driven selection and retarget path.
+
+Commissioning suite repetition is explicitly capped at three with
+`HARDWARE_ANGER_SUITE_CYCLES=1..3`. The first 15-second run passed two complete
+cycles, then failed closed on cycle 3 because the final right landing restored
+only three estimated supports after its dwell. Recovery and SDK release still
+completed without a safety fault. Do not weaken the four-support gate or retry
+the repeated run without reviewing that support redistribution. The positive
+operator visual verdict does not override this failed telemetry gate.
+
+The first source fix did not lower any load threshold: it added a 0.30-second
+planted x/y recenter before the gate. It clean-built against the actual aarch64
+MotionSDK, passed all seven tests, and was installed as SHA-256
+`37793e3eb35f7dbc8e99bbd0d21619a74b0a52558572dea315e387c85169b3ee`.
+Its authorized live repeat passed cycle 1, then failed closed on cycle 2's final
+right landing at 13.066 N because support count remained three. It recovered to
+four loaded feet, released with no safety fault, and ended in state `1/0/0`.
+
+The replacement uses the full canonical support reset described above and logs
+all four landing forces. It passed the seven local and aarch64 native tests and
+the authorized three-cycle physical suite. Its installed SHA-256 is
+`a77433ace5afb56a4bbd204df28c167cf7d46022d2b3155568086ac78fdd630c`.
+The 722-sample baseline measured 121.912 N; all six placements restored four
+supports. Cycle 1 left/right unload-to-landing values were
+`3.901/29.767 N` and `1.386/29.509 N`; cycle 2 values were
+`1.849/26.950 N` and `0.466/29.667 N`; cycle 3 values were
+`2.085/26.949 N` and `0.160/29.563 N`. There was no safety fault or feedback
+pause, ownership released, and fresh post-run state was `1/0/0` with battery
+77%, zero errors, STOP false, centered axes, and no owner.
+
+The normal allowlist remains `neutral`. Do not add `anger` to
+`HARDWARE_COMMISSIONED_EMOTIONS` until a separately authorized live chat
+selection and mid-motion retarget test succeeds.
 
 ## Development-side commands
 

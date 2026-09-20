@@ -14,6 +14,11 @@ MINIMUM_BATTERY="${HARDWARE_MINIMUM_BATTERY:-25}"
 JOY_PAW_TEST="${HARDWARE_JOY_PAW_TEST:-false}"
 JOY_SUITE_TEST="${HARDWARE_JOY_SUITE_TEST:-false}"
 PAW_LIFT_METERS="${HARDWARE_PAW_LIFT_METERS:-0.005}"
+ANGER_SINGLE_STOMP_TEST="${HARDWARE_ANGER_SINGLE_STOMP_TEST:-false}"
+ANGER_SUITE_TEST="${HARDWARE_ANGER_SUITE_TEST:-false}"
+ANGER_SUITE_CYCLES="${HARDWARE_ANGER_SUITE_CYCLES:-1}"
+ANGER_FIRST_PAW="${HARDWARE_ANGER_FIRST_PAW:-left}"
+ANGER_LIFT_METERS="${HARDWARE_ANGER_LIFT_METERS:-0.035}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SSH_OPTIONS=(-o ConnectTimeout=8 -o ExitOnForwardFailure=yes -o ServerAliveInterval=5 -o ServerAliveCountMax=3)
 CONTROL_DIR="$(mktemp -d)"
@@ -45,6 +50,39 @@ esac
 case "${PAW_LIFT_METERS}" in
   ''|*[!0-9.]*) echo "HARDWARE_PAW_LIFT_METERS must be numeric." >&2; exit 2 ;;
 esac
+case "${ANGER_SINGLE_STOMP_TEST}" in
+  true) ANGER_SINGLE_STOMP_TEST_ARGUMENT="--anger-single-stomp-test" ;;
+  false) ANGER_SINGLE_STOMP_TEST_ARGUMENT="" ;;
+  *) echo "HARDWARE_ANGER_SINGLE_STOMP_TEST must be true or false." >&2; exit 2 ;;
+esac
+case "${ANGER_SUITE_TEST}" in
+  true) ANGER_SUITE_TEST_ARGUMENT="--anger-suite-test" ;;
+  false) ANGER_SUITE_TEST_ARGUMENT="" ;;
+  *) echo "HARDWARE_ANGER_SUITE_TEST must be true or false." >&2; exit 2 ;;
+esac
+case "${ANGER_SUITE_CYCLES}" in
+  ''|*[!0-9]*) echo "HARDWARE_ANGER_SUITE_CYCLES must be an integer." >&2; exit 2 ;;
+esac
+if ((ANGER_SUITE_CYCLES < 1 || ANGER_SUITE_CYCLES > 3)); then
+  echo "HARDWARE_ANGER_SUITE_CYCLES must be in [1, 3]." >&2
+  exit 2
+fi
+if [[ "${ANGER_SUITE_TEST}" != true && "${ANGER_SUITE_CYCLES}" != 1 ]]; then
+  echo "HARDWARE_ANGER_SUITE_CYCLES above 1 requires HARDWARE_ANGER_SUITE_TEST=true." >&2
+  exit 2
+fi
+case "${ANGER_FIRST_PAW}" in
+  left|right) ;;
+  *) echo "HARDWARE_ANGER_FIRST_PAW must be left or right." >&2; exit 2 ;;
+esac
+case "${ANGER_LIFT_METERS}" in
+  ''|*[!0-9.]*) echo "HARDWARE_ANGER_LIFT_METERS must be numeric." >&2; exit 2 ;;
+esac
+if [[ "${JOY_PAW_TEST}" == true || "${JOY_SUITE_TEST}" == true ]] &&
+   [[ "${ANGER_SINGLE_STOMP_TEST}" == true || "${ANGER_SUITE_TEST}" == true ]]; then
+  echo "Joy and anger commissioning modes are mutually exclusive." >&2
+  exit 2
+fi
 
 cleanup() {
   trap - EXIT INT TERM
@@ -111,7 +149,7 @@ BRAIN_PID=$!
 
 echo "Starting the continuous official MotionSDK expression owner (allowlist: ${COMMISSIONED_EMOTIONS}, scale: ${PROFILE_SCALE})."
 ssh "${SSH_OPTIONS[@]}" -J "${MOTION_SSH}" "${PERCEPTION_SSH}" \
-  "set -e; umask 077; echo \$\$ >'${REMOTE_RUNNER_PID_FILE}'; exec ~/emotion_bot_lite3_hw_ws/bin/motion_sdk_expression_runner --execute --continuous --commissioned-emotions='${COMMISSIONED_EMOTIONS}' --profile-scale='${PROFILE_SCALE}' --minimum-battery='${MINIMUM_BATTERY}' --pid-file='${REMOTE_RUNNER_PID_FILE}' ${JOY_PAW_TEST_ARGUMENT} ${JOY_SUITE_TEST_ARGUMENT} --paw-lift-meters='${PAW_LIFT_METERS}'" &
+  "set -e; umask 077; echo \$\$ >'${REMOTE_RUNNER_PID_FILE}'; exec ~/emotion_bot_lite3_hw_ws/bin/motion_sdk_expression_runner --execute --continuous --commissioned-emotions='${COMMISSIONED_EMOTIONS}' --profile-scale='${PROFILE_SCALE}' --minimum-battery='${MINIMUM_BATTERY}' --pid-file='${REMOTE_RUNNER_PID_FILE}' ${JOY_PAW_TEST_ARGUMENT} ${JOY_SUITE_TEST_ARGUMENT} --paw-lift-meters='${PAW_LIFT_METERS}' ${ANGER_SINGLE_STOMP_TEST_ARGUMENT} ${ANGER_SUITE_TEST_ARGUMENT} --anger-suite-cycles='${ANGER_SUITE_CYCLES}' --anger-first-paw='${ANGER_FIRST_PAW}' --anger-lift-meters='${ANGER_LIFT_METERS}'" &
 EXPRESSION_PID=$!
 
 set +e

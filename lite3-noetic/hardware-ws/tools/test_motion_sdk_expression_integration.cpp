@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 
+#include "motion_sdk_anger_stomp.hpp"
 #include "motion_sdk_expression_profile.hpp"
 #include "motion_sdk_shared_state.hpp"
 
@@ -51,6 +52,29 @@ int main() {
   // 4.000 + 1.500 + 0.350 seconds, allowing one binary-float boundary tick.
   assert(status.find("\"schema_version\":\"1.0\"") != std::string::npos);
   assert(status.find("\"phase\":\"profile\"") != std::string::npos);
+
+  // Raised-paw chat retarget: a newer request is held pending, prevents a
+  // second stomp, and becomes active only after the external controller has
+  // completed lowering, 1.5 s neutral return, and 0.35 s exact hold.
+  ExpressionEngine retarget_engine({"neutral", "anger", "joy"});
+  retarget_engine.Request("anger", -0.8, 0.9, 0.0);
+  retarget_engine.Sample(
+      ExpressionEngine::kNeutralReturnSeconds +
+      ExpressionEngine::kNeutralHoldSeconds + 0.001);
+  assert(retarget_engine.active() == "anger");
+  AngerRetargetTracker retarget(100);
+  AngerStompGate landing_gate;
+  assert(landing_gate.BeginStomp());
+  retarget.Observe(true, true, 101, "joy", 0.8, 0.9);
+  assert(!retarget.may_start_next_stomp());
+  landing_gate.CompleteLanding(true, kAngerLandingDwellSeconds);
+  assert(landing_gate.next_stomp_allowed());
+  assert(!retarget.may_start_next_stomp());
+  retarget_engine.CompleteExternalNeutralTransition(
+      retarget.emotion(), retarget.valence(), retarget.arousal(), 10.0);
+  assert(retarget_engine.active() == "joy");
+  assert(retarget_engine.pending().empty());
+
   // The official owner is the only fake sender instantiated in this harness;
   // Retroid and legacy action senders have no execution path here.
   return 0;

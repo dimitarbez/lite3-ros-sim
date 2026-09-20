@@ -267,6 +267,31 @@ class ExpressionEngine {
     if (phase_ != "neutral_return" && phase_ != "neutral_hold") BeginReturn(now);
   }
 
+  // A lifted-paw controller owns the complete safe transition itself: finish
+  // lowering, restore canonical stand over 1.5 s, then hold exact stand for
+  // 0.35 s. Once those gates pass, resume this declarative engine directly at
+  // the newest requested profile without commanding a second reset movement.
+  void CompleteExternalNeutralTransition(const std::string& emotion,
+                                         double valence, double arousal,
+                                         double now) {
+    if (!PhysicalProfiles().count(emotion)) {
+      throw std::invalid_argument("unknown emotion");
+    }
+    requested_ = emotion;
+    valence_ = ClampExpression(valence, -1.0, 1.0);
+    arousal_ = ClampExpression(arousal, 0.0, 1.0);
+    desired_ = commissioned_.count(emotion) ? emotion : "neutral";
+    active_ = desired_;
+    pending_.clear();
+    phase_ = "profile";
+    phase_started_ = now;
+    return_start_ = {};
+    last_ = {};
+    profile_cycle_ = 0;
+    stale_ = false;
+    reset_complete_ = false;
+  }
+
   ExpressionSample Sample(double now) {
     UpdateAffect(now);
     if (phase_ == "neutral_return") {

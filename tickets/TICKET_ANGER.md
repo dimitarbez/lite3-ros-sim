@@ -4,12 +4,24 @@
 [Reference: accepted joy machinery](TICKET_JOY_FRONT_PAW.md) ·
 [Previous: Surprise](TICKET_SURPRISE.md)
 
-## Status — planned
+## Status — canonical-reset suite passed; live chat retarget remains
 
-The desired stomp choreography is specified but is not implemented,
-commissioned, or operator-accepted. Earlier planted compression pulses are
-prototypes only. This ticket targets real paw unload and controlled placement,
-not a forceful impact.
+The controlled placement state machine, normal chat selection, newest-request
+retargeting, bounds, contact gates, and offline tests are implemented. The
+hardened sequence does not weaken a threshold. A bounded single placement and
+the earlier alternating loop physically passed on 2026-09-20, and the operator
+visually accepted the choreography. The original repeat failed its third-cycle
+final landing gate, and a first x/y-only recenter failed the same right-paw gate
+in cycle 2. The canonical-reset revision was then clean-built against the
+robot's actual aarch64 MotionSDK and passed its authorized three-cycle physical
+suite: all six placements restored four-foot support, with no safety fault,
+feedback pause, or ownership leak. Normal chat-driven selection remains disabled
+until the state-driven selection and mid-motion retarget path are tested live.
+
+The installed canonical-reset runner SHA-256 is
+`a77433ace5afb56a4bbd204df28c167cf7d46022d2b3155568086ac78fdd630c`.
+The previously accepted joy runner remains preserved under its checksum-named
+backup, and the normal allowlist remains `neutral`.
 
 ## Goal and emotional read
 
@@ -18,20 +30,24 @@ the body, transfer support, lift one paw, place it firmly under a bounded
 trajectory, recover contact, then mirror the other paw. It must be heavier and
 more deliberate than joy, without becoming a jump, gait, kick, or torque strike.
 
-## Proposed five-second loop
+## Canonical-reset 7.7-second candidate loop
 
 Initial targets, subject to offline bounds and physical commissioning:
 
 1. **Brace — 0.55 s:** lower into a broad four-foot stance and bias load rearward.
 2. **First transfer/lift — 0.65 s:** transfer away and lift the first front paw
    approximately 35–50 mm.
-3. **First controlled place — 0.60 s:** lower with bounded vertical speed;
-   confirm landing and dwell 0.25 s before continuing.
-4. **Second transfer/lift — 0.65 s:** mirror only after four-foot support is
+3. **First controlled place — 0.60 s:** lower with bounded vertical speed and
+   dwell 0.25 s without further downward drive.
+4. **First support reset — 1.35 s:** keep the paw down, return every Cartesian
+   offset to canonical stand over 1.0 s, hold for 0.35 s, then require all four
+   support latches.
+5. **Second transfer/lift — 0.65 s:** mirror only after four-foot support is
    restored.
-5. **Second controlled place — 0.60 s:** lower, confirm landing, and dwell.
-6. **Hold — 0.65 s:** maintain a low assertive four-foot pose.
-7. **Recover — 1.30 s:** return to the neutral entrance pose.
+6. **Second controlled place/reset — 1.95 s:** lower, dwell, return to canonical
+   stand, hold, and confirm all four supports again.
+7. **Hold — 0.65 s:** maintain a low assertive four-foot pose.
+8. **Recover — 1.30 s:** return to the neutral entrance pose.
 
 Exact phase timing may change after measured touchdown review, but total cadence
 must remain slower and heavier than joy's 2.5-second-per-paw cycle.
@@ -61,19 +77,24 @@ hold/release behavior.
 ## Implementation checklist
 
 - [x] Emotional intent and candidate phase order documented.
-- [ ] Implement brace, alternating lift/place, landing dwell, hold, and recovery.
-- [ ] Add anger-specific lift, downward velocity, acceleration, and dwell limits.
-- [ ] Reuse contact/load gates under the single official owner.
-- [ ] Test both paw orders, combined workspace, joint bounds, finite samples,
+- [x] Implement brace, alternating lift/place, landing dwell, hold, and recovery.
+- [x] Add anger-specific lift, downward velocity, acceleration, and dwell limits.
+- [x] Reuse contact/load gates under the single official owner.
+- [x] Test both paw orders, combined workspace, joint bounds, finite samples,
   touchdown velocity, acceleration, seams, and exact recovery.
-- [ ] Prove the second stomp cannot begin without confirmed landing and dwell.
-- [ ] Test retargeting during both raised-paw and placement phases.
-- [ ] Wire validated `anger` state through exact neutral.
-- [ ] Pass local and aarch64 suites.
-- [ ] Commission a bounded single stomp before the full alternating loop.
-- [ ] Complete the full physical loop with state, IMU, joint, contact, STOP,
+- [x] Prove the second stomp cannot begin without confirmed landing and dwell.
+- [x] Test retargeting during both raised-paw and placement phases offline.
+- [x] Wire validated `anger` state through exact neutral behind the allowlist.
+- [x] Pass the complete local offline gate, including full-runner compilation.
+- [x] Compile the first hardened runner against the robot's actual aarch64
+  MotionSDK and pass all seven suites.
+- [x] Commission a bounded single stomp before the full alternating loop.
+- [x] Complete the full physical loop with state, IMU, joint, contact, STOP,
   tracking, feedback, touchdown, ownership, and release evidence.
-- [ ] Obtain operator acceptance as anger without harsh impact.
+- [x] Obtain operator acceptance as anger without harsh impact.
+- [x] Revalidate the canonical-reset three-cycle suite on hardware.
+- [ ] Validate normal chat selection and retargeting on hardware before adding
+  `anger` to the normal allowlist.
 
 ## Acceptance criteria
 
@@ -83,6 +104,156 @@ hold/release behavior.
 - The motion reads as anger rather than fast joy taps.
 - Any normal emotion change passes through exact neutral.
 - No impact fault, slip, body instability, stale continuation, or owner conflict.
+
+## Physical commissioning evidence — 2026-09-20
+
+Both sessions started from state/gait/motion `1/0/0`, battery above the 75%
+runtime floor, zero errors, normal attitude, fresh centered Retroid axes, STOP
+false, active services, and no ownership marker.
+
+The bounded single left-front session established a 753-sample, 120.512 N
+four-foot baseline. The paw unloaded to 4.116 N with two strong supports and
+landed at 17.987 N with all four supports restored. Feedback age/update gap
+maxima were 8.017/8.624 ms with no pause. The runner reported no safety fault,
+released ownership, and the post-run state remained `1/0/0`, battery 90%, with
+zero errors.
+
+The subsequent complete loop established a 706-sample, 120.681 N baseline.
+Front-left unloaded to 3.992 N and landed at 18.101 N; front-right then unloaded
+to 0.603 N and landed at 14.071 N. Both landings restored all four supports.
+One 148.120 ms telemetry-age event occurred during the preceding neutral window;
+the watchdog froze the trajectory and recovered after 20 fresh frames before
+Anger began. Neither placement paused. The session reported no safety fault,
+released ownership, and ended at state/gait/motion `1/0/0`, battery 89%, zero
+errors, STOP false, centered axes, and no owner.
+
+These measurements establish bounded execution. The operator subsequently
+reported that the 15-second choreography looked good, providing the required
+visual verdict. Normal validated `anger` selection still requires physical
+revalidation of the hardened landing/re-latch and chat-retarget paths.
+
+### Fifteen-second observation
+
+At the operator's request, the commissioning runner was extended with a
+hard-capped three-cycle mode and rerun for 15 seconds of Anger under one owner.
+The baseline was valid with 702 samples and 121.990 N total load. The first two
+five-second cycles passed both paws completely:
+
+- cycle 1 left unload/landing `4.201/17.720 N`, right `0.872/14.988 N`;
+- cycle 2 left unload/landing `1.255/18.477 N`, right `0.121/14.606 N`.
+
+Cycle 3 confirmed left unload/landing at `1.270/17.760 N` and right unload at
+`0.007 N`. Its final right paw reached `13.133 N`, but only three supports were
+re-latched at the end of the 0.25-second dwell, so the four-foot landing gate
+correctly failed. The runner still completed the hold/recovery, released SDK
+ownership, and did not report a safety fault. Feedback had no pause; maximum
+age/update gap was `82.340/11.489 ms`. Post-run state was `1/0/0`, battery 87%,
+errors zero, STOP false, centered axes, active services, and no owner.
+
+This endurance run is a failed acceptance result even though the robot remained
+safe. Do not increase impact, weaken the four-support rule, or retry blindly.
+Review the observed choreography and the third-cycle support redistribution
+before another repeated run or normal chat integration.
+
+The operator then reported that the motion looked good. This accepts the visual
+choreography, but does not override the failed third-cycle telemetry gate or
+commission normal chat-driven Anger.
+
+## First hardening and live revalidation
+
+The first failure was evaluated while the body was still held in the right-paw
+unloading offset. Revision
+`37793e3eb35f7dbc8e99bbd0d21619a74b0a52558572dea315e387c85169b3ee`
+preserved the dwell, added a 0.30-second planted x/y recenter, and retained every
+load threshold. A clean temporary aarch64 build against the actual MotionSDK and
+all seven suites passed before installation.
+
+The authorized live repeat began from the guarded state-`1` path with a valid
+751-sample, 120.606 N baseline. Cycle 1 passed left unload/landing at
+`4.298/19.680 N` and right at `0.396/11.317 N`, with four supports at both
+landings. Cycle 2 passed left at `1.648/14.527 N`; its right paw unloaded to
+`0.001 N` and landed at `13.066 N`, but support count remained three after the
+recenter. Cycle 3 did not start. The runner recovered and released with no
+safety fault or feedback pause; feedback age/update-gap maxima were
+`49.891/50.736 ms`.
+
+Post-release state was `1/0/0`, battery 79%, errors zero, normal attitude, STOP
+false, centered axes, all four recovered loads at
+`23.327/26.329/40.331/33.006 N`, and no owner. This proves x/y recentering alone
+does not resolve the repeated right-side support redistribution.
+
+The next revision keeps the paw planted but returns body shift, brace, and
+stance width to exact canonical stand over 1.0 second, holds it for 0.35
+seconds, and only then evaluates the unchanged four-support latch. This
+canonical support reset is used between paws and loops. It passed the seven
+local and aarch64 native tests and the physical three-cycle suite recorded
+below.
+
+The normal runner now selects this contact-gated state machine when `anger` is
+explicitly present in the commissioned allowlist. A newer chat category during
+brace, lift, placement, dwell, hold, or recovery is latched without starting
+another stomp. Any raised paw is lowered and re-latched first; the runner then
+returns to canonical stand over 1.5 seconds, holds exact neutral for 0.35 seconds,
+and starts only the newest pending commissioned category. Link staleness follows
+the same recovery and then releases ownership. STOP and hard safety faults keep
+their immediate fail-closed release behavior.
+
+`make -C lite3-noetic hardware-expression-tests` passes the seven native C++
+tests for the canonical-reset revision, including a full runner compile harness.
+The installed runner is now the canonical-reset binary identified above. The
+normal allowlist remains `neutral` because the chat selection/retarget path has
+not yet been exercised on hardware.
+
+## Canonical-reset three-cycle acceptance — 2026-09-20
+
+With fresh authorization, the canonical-reset runner was clean-built against
+the actual aarch64 MotionSDK, passed all seven suites, and was installed with
+SHA-256
+`a77433ace5afb56a4bbd204df28c167cf7d46022d2b3155568086ac78fdd630c`.
+The normal allowlist stayed `neutral`; only the explicit three-cycle suite was
+selected with a 75% battery floor, left paw first, and the 35 mm lift.
+
+The baseline used 722 samples and measured 121.912 N total load. Every landing
+restored all four support latches:
+
+- cycle 1: left unload/landing `3.901/29.767 N`; right `1.386/29.509 N`;
+- cycle 2: left unload/landing `1.849/26.950 N`; right `0.466/29.667 N`;
+- cycle 3: left unload/landing `2.085/26.949 N`; right `0.160/29.563 N`.
+
+The session completed with no safety fault and no feedback pause or recovery.
+Maximum feedback age/consecutive update gap was `12.291/10.382 ms`. Ownership
+was released. Fresh post-run evidence was state/gait/motion `1/0/0`, battery
+77%, errors zero, roll/pitch `0.392/0.204 deg`, STOP false, fresh centered axes,
+no runner or ownership marker, and four loaded feet at
+`24.131/30.575/43.193/38.545 N`.
+
+This closes the repeated canonical-reset commissioning gate. It does not prove
+the normal chat-driven selector or a retarget received while a paw is active;
+those remain disabled pending a separately authorized supervised live test.
+
+## Implemented commissioning envelope
+
+- Brace: 8 mm body lowering plus 6 mm per-side stance widening over 0.55 s.
+- Paw target: 35 mm, below joy's accepted 50 mm target.
+- Placement: 0.35 s quintic lowering followed by a stationary 0.25 s landing
+  dwell; no requested downward continuation after the paw reaches zero lift.
+- Support reset: 1.0 s planted return of body shift, brace, and stance width to
+  canonical stand plus a 0.35 s exact hold after every dwell; the unchanged
+  four-support gate is evaluated only after that hold.
+- Analytic Cartesian caps at 35 mm: 0.1875 m/s downward velocity and about
+  1.65 m/s^2 acceleration, below the hard 0.190 m/s and 1.70 m/s^2 limits.
+- Support: target-paw unload, two strong non-target supports, at least 70 N
+  aggregate non-target load, target landing, and all four supports restored.
+- Order: `left` and `right` are both explicit commissioning choices. The full
+  suite cannot begin the second paw until the first has passed landing and the
+  complete dwell.
+- Repetition: explicit suite mode is capped at three cycles. Every cycle repeats
+  all unload/landing gates; a failed cycle prevents success and releases after
+  bounded recovery.
+- Recovery: commissioning loops use the 0.65 s assertive hold and 1.30 s return.
+  A chat retarget uses a 1.5 s return plus 0.35 s exact-neutral hold. Checked-in
+  `anger` selection remains disabled until the normal chat selection and
+  retarget path are physically validated.
 
 ## Non-goals
 

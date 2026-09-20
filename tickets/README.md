@@ -12,7 +12,7 @@
 | Disgust | [Disgust recoil](TICKET_DISGUST.md) | Planned |
 | Fear | [Fear crouch and guarded hovers](TICKET_FEAR.md) | Planned |
 | Surprise | [Surprise rise and freeze](TICKET_SURPRISE.md) | Planned |
-| Anger | [Anger controlled front-paw stomps](TICKET_ANGER.md) | Planned |
+| Anger | [Anger controlled front-paw stomps](TICKET_ANGER.md) | Canonical-reset 3-cycle suite passed; live chat retarget remains |
 
 All tickets inherit the [shared transition rule](#non-negotiable-transition-rule):
 finish any limb recovery, return to canonical stand over 1.5 seconds, hold exact
@@ -27,9 +27,19 @@ neutral for 0.35 seconds, then start only the newest pending emotion.
   suite completed five seconds of neutral followed by five seconds of joy,
   confirmed unload and landing for both front paws, released SDK ownership,
   and reported no safety fault.
-- **Affection, curiosity, sadness, disgust, fear, surprise, and anger remain to
-  be implemented and commissioned.** Their older four-feet-planted profiles are
-  prototypes/fallbacks, not the final accepted physical expressions.
+- **Anger is implemented and its single-placement and alternating physical
+  suites passed.** Both paws produced confirmed unload and four-foot landing,
+  with clean release and no safety fault. A later 15-second repeat passed two
+  loops but failed closed when the third loop's final right landing re-latched
+  only three supports. The operator subsequently reported that the choreography
+  looked good, so visual acceptance is complete. An x/y-recenter hardening passed
+  all seven aarch64 suites but failed the right landing in live cycle 2. The
+  replacement returns fully to canonical stand and holds 0.35 seconds between
+  paws; it passed all seven aarch64 suites and an authorized three-cycle physical
+  run with every landing restoring four supports. Normal chat selection and
+  retargeting remain live-unvalidated, so the checked-in allowlist stays
+  neutral-only. Affection, curiosity, sadness, disgust, fear, and surprise remain
+  to be implemented.
 
 The remaining emotions must be implemented to the same standard as joy:
 recognizable whole-body choreography, explicit phases, IK-generated motion,
@@ -75,7 +85,7 @@ evidence. An emotion is complete only when every item under it is checked.
 - [x] Intended physical choreography specified below.
 - [ ] Implement the final phased IK/contact-aware profile.
 - [ ] Add native trajectory, bound, recovery, and transition tests.
-- [ ] Integrate normal emotion-state selection through exact neutral.
+- [x] Integrate normal emotion-state selection through exact neutral offline.
 - [ ] Pass aarch64 build/tests and a bounded physical telemetry run.
 - [ ] Receive operator visual acceptance as recognizably affectionate.
 
@@ -84,7 +94,7 @@ evidence. An emotion is complete only when every item under it is checked.
 - [x] Intended physical choreography specified below.
 - [ ] Implement the final phased IK/contact-aware profile.
 - [ ] Add native trajectory, bound, recovery, and transition tests.
-- [ ] Integrate normal emotion-state selection through exact neutral.
+- [x] Integrate normal emotion-state selection through exact neutral offline.
 - [ ] Pass aarch64 build/tests and a bounded physical telemetry run.
 - [ ] Receive operator visual acceptance as recognizably curious.
 
@@ -127,12 +137,16 @@ evidence. An emotion is complete only when every item under it is checked.
 ### [Anger](TICKET_ANGER.md)
 
 - [x] Intended physical choreography specified below.
-- [ ] Implement the final phased contact-confirmed front-paw stomp profile.
-- [ ] Add native trajectory, bound, touchdown, recovery, and transition tests.
-- [ ] Integrate normal emotion-state selection through exact neutral.
-- [ ] Pass aarch64 build/tests and a bounded physical telemetry run.
-- [ ] Receive operator visual acceptance as recognizably angry without a
+- [x] Implement the phased contact-confirmed front-paw commissioning profile.
+- [x] Add native trajectory, bound, touchdown, recovery, and second-paw gate tests.
+- [x] Integrate normal emotion-state selection through exact neutral offline.
+- [x] Pass the local and aarch64 build/tests.
+- [x] Pass the bounded single-placement and complete alternating physical runs.
+- [x] Receive operator visual acceptance as recognizably angry without a
   forceful impact.
+- [x] Deploy and physically revalidate the canonical-reset repeated path.
+- [ ] Physically validate normal chat selection and retargeting before changing
+  the normal allowlist.
 
 ### Shared transition engine
 
@@ -280,8 +294,12 @@ reporting failure. Emotion retargeting cannot skip that recovery.
 
 ## Scope boundary
 
-- Neutral and joy are the only operator-accepted physical expressions as of
-  this update. Do not describe the other seven as implemented or commissioned.
+- Neutral, joy, and the Anger choreography have operator visual acceptance as
+  of this update. Only neutral is enabled for normal hardware use; Joy remains
+  suite-only, and Anger's canonical-reset commissioning suite is physically
+  accepted while its normal chat/retarget path remains disabled and
+  live-unvalidated. Do not describe the other six as implemented or
+  commissioned.
 - True airborne hops, gait/action jump primitives, world-frame locomotion, and
   forceful impacts remain out of scope. Low-clearance, contact-confirmed paw
   lifts and controlled placements are in scope for the remaining emotions.

@@ -1125,6 +1125,116 @@ support shift, low-clearance front-paw lift, confirmed unload, gentle landing,
 exact-neutral recovery, and then the opposite paw. Read-only restrained
 calibration is required before implementing or enabling that state machine.
 
+#### Controlled Anger single-placement and alternating suite — 2026-09-20
+
+The explicit Anger commissioning runner uses the already accepted torque-load
+gate and one continuous official SDK owner. Its 35 mm paw target is below joy's
+accepted 50 mm lift. Each placement lowers quintically for 0.35 seconds, then
+holds zero lift for a 0.25-second landing dwell; analytic Cartesian limits are
+0.1875 m/s and approximately 1.65 m/s^2. A separate sequence gate prevents the
+opposite paw from starting until four-foot landing and the full dwell pass.
+
+After an initial no-command rejection at unknown basic state `98`, the operator
+restored sitting state `1`, a clear area, and STOP readiness. The single
+left-front run used a 120.512 N baseline, confirmed unload at 4.116 N, confirmed
+four-foot landing at 17.987 N, and released without a fault. The complete loop
+used a 120.681 N baseline; left unload/landing were 3.992/18.101 N and right
+unload/landing were 0.603/14.071 N. One 148.120 ms feedback pause happened in
+the neutral window and recovered before either stomp. The Anger phases had no
+pause, tracking fault, state/error fault, STOP event, or ownership conflict.
+
+The final robot state was `1/0/0`, battery 89%, errors `0`, STOP false, centered
+axes, active services, and no ownership marker. Installed runner SHA-256 was
+`2501f3bbb819c636a04f599b9630332ffd3a2d1d79b71a6d6d84116828e1e27d`.
+This is physical telemetry acceptance only; the normal `anger` allowlist and
+chat-driven retarget path remain disabled until the repeated landing issue and
+raised-paw/placement retarget tests pass.
+
+An operator-requested 15-second follow-up ran three five-second loops under the
+same owner. Cycles 1 and 2 passed every unload and four-foot landing check.
+Cycle 3 passed the left placement and right unload, but its final right landing
+ended at 13.133 N with only three supports re-latched after the dwell. The
+runner classified the session as failed, completed recovery, and released. No
+safety fault or feedback pause occurred; final state was `1/0/0`, battery 87%,
+errors `0`, STOP false, and no owner. Preserve this failure as endurance
+evidence: do not weaken the gate, add impact, or retry blindly.
+
+The operator subsequently reported that the Anger motion looked good, providing
+visual acceptance of the choreography. That verdict does not supersede the
+failed third-cycle landing gate or authorize normal chat-driven selection.
+
+#### Offline Anger hardening after the failed repeat — 2026-09-20
+
+No hardware connection or command was made during this change. The source now
+keeps the 0.25-second no-drive landing dwell, adds a 0.30-second planted recenter,
+and applies the unchanged four-support latch at the centered endpoint. This
+addresses the observed support redistribution without increasing impact or
+weakening contact evidence.
+
+The allowlisted normal runtime also selects the contact-gated Anger state
+machine and monitors sequence-locked chat updates during its phases. A retarget
+finishes the current paw landing/re-latch, suppresses any next stomp, returns to
+canonical stand over 1.5 seconds, holds exact neutral for 0.35 seconds, and then
+uses only the newest pending category. Staleness safely resets and releases;
+STOP and hard faults still release immediately.
+
+The complete offline hardware gate passed, including seven native C++ tests and
+a new full-runner compile harness. At that stage the hardened source was not
+deployed or physically revalidated, so the normal allowlist stayed `neutral`
+pending a separately authorized aarch64 build, bounded repeated suite, and live
+chat-retarget test.
+
+#### Live result of the x/y-recenter revision — 2026-09-20
+
+After a fresh clear-area and STOP-readiness confirmation, the first hardening
+was clean-built against the actual aarch64 MotionSDK. Seven tests passed and the
+installed binary matched SHA-256
+`37793e3eb35f7dbc8e99bbd0d21619a74b0a52558572dea315e387c85169b3ee`.
+The explicit three-cycle suite retained a 75% battery floor and every original
+unload, support, touchdown, tracking, feedback, state, STOP, and ownership gate.
+
+Its 751-sample baseline was valid at 120.606 N. Cycle 1 passed both paws with
+left unload/landing 4.298/19.680 N and right 0.396/11.317 N. Cycle 2 passed left
+at 1.648/14.527 N, then the right paw unloaded to 0.001 N and landed at 13.066 N
+but only three supports re-latched. Cycle 3 did not start. Recovery and SDK
+release completed with no safety fault or feedback pause.
+
+The fresh final state was `1/0/0`, battery 79%, errors zero, normal attitude,
+STOP false, centered axes, no owner, and recovered four-foot loads of
+23.327/26.329/40.331/33.006 N. No retry occurred. The evidence shows that x/y
+recenter alone did not remove the braced-posture support redistribution.
+
+The subsequent source-only revision returns shift, brace, and stance width to
+canonical stand over 1.0 second, holds exact stand for 0.35 seconds, and then
+checks the unchanged four-support latch. It also logs every landing force. This
+revision passes seven local native tests. At this point in the chronology it was
+not installed or physically validated.
+
+#### Canonical-reset three-cycle acceptance — 2026-09-20
+
+Following fresh authorization, the canonical-reset runner clean-built against
+the actual aarch64 MotionSDK, passed all seven suites, and was installed as
+SHA-256
+`a77433ace5afb56a4bbd204df28c167cf7d46022d2b3155568086ac78fdd630c`.
+The normal allowlist remained `neutral`; only the explicit bounded three-cycle
+suite ran, with a 75% battery floor, left paw first, and a 35 mm lift.
+
+The 722-sample baseline measured 121.912 N. Every landing restored all four
+support latches. Cycle 1 left/right unload-to-landing values were
+`3.901/29.767 N` and `1.386/29.509 N`; cycle 2 values were
+`1.849/26.950 N` and `0.466/29.667 N`; cycle 3 values were
+`2.085/26.949 N` and `0.160/29.563 N`.
+
+No safety fault, feedback pause, or recovery occurred. Maximum feedback age and
+consecutive update gap were `12.291/10.382 ms`. The runner released ownership;
+fresh post-run state was `1/0/0`, battery 77%, errors zero, roll/pitch
+`0.392/0.204 deg`, STOP false, centered axes, no runner or ownership marker,
+and four-foot loads `24.131/30.575/43.193/38.545 N`.
+
+This closes the repeated canonical-reset commissioning gate. Keep the normal
+allowlist `neutral` until a separately authorized supervised test proves live
+chat selection and retargeting during an active paw sequence.
+
 ### Remaining work
 
 - Keep `direct_joint.takeover_transition_commissioned=false`; do not retry

@@ -12,6 +12,13 @@ add_executable(test_motion_sdk_expression_integration
 add_executable(test_motion_sdk_contact_estimator
   test_motion_sdk_contact_estimator.cpp)
 add_executable(test_motion_sdk_paw_lift test_motion_sdk_paw_lift.cpp)
+add_executable(test_motion_sdk_anger_stomp test_motion_sdk_anger_stomp.cpp)
+add_executable(test_motion_sdk_runner_compile
+  run_motion_sdk_neutral_breathing.cpp)
+target_include_directories(test_motion_sdk_runner_compile PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}/test_stubs"
+  "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(test_motion_sdk_runner_compile PRIVATE pthread m rt dl)
 
 enable_testing()
 add_test(NAME motion_sdk_safety COMMAND test_motion_sdk_safety)
@@ -21,6 +28,9 @@ add_test(NAME motion_sdk_expression_integration
 add_test(NAME motion_sdk_contact_estimator
   COMMAND test_motion_sdk_contact_estimator)
 add_test(NAME motion_sdk_paw_lift COMMAND test_motion_sdk_paw_lift)
+add_test(NAME motion_sdk_anger_stomp COMMAND test_motion_sdk_anger_stomp)
+add_test(NAME motion_sdk_runner_compile
+  COMMAND test_motion_sdk_runner_compile --help)
 
 option(BUILD_EXPRESSION_RUNTIME "Build against the official Lite3 MotionSDK" OFF)
 set(MOTION_SDK_DIR "" CACHE PATH "Checked-out official Lite3_MotionSDK root")

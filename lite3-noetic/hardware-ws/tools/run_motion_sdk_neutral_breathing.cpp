@@ -8,6 +8,7 @@
 #include <cstring>
 #include <fcntl.h>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <set>
 #include <sstream>
@@ -22,6 +23,7 @@
 
 #include "motionexample.h"
 #include "motion_sdk_breath_profile.hpp"
+#include "motion_sdk_anger_stomp.hpp"
 #include "motion_sdk_contact_estimator.hpp"
 #include "motion_sdk_expression_profile.hpp"
 #include "motion_sdk_paw_lift.hpp"
@@ -503,20 +505,29 @@ bool SetPawLiftCommand(RobotCmd* command, int leg, double lift_m,
                        double shift_y_m, double shift_x_velocity_mps,
                        double shift_y_velocity_mps,
                        double diagonal_support_z_m,
-                       double diagonal_support_z_velocity_mps) {
+                       double diagonal_support_z_velocity_mps,
+                       double common_z_m = 0.0,
+                       double common_z_velocity_mps = 0.0,
+                       double stance_y_m = 0.0,
+                       double stance_y_velocity_mps = 0.0) {
   SetStandCommand(command, BreathPose{});
   if (leg < 0 || leg >= 2) return false;
   for (int current_leg = 0; current_leg < 4; ++current_leg) {
     const int diagonal_support_leg = 3 - leg;
-    const double lift = current_leg == leg ? lift_m :
-        (current_leg == diagonal_support_leg ? diagonal_support_z_m : 0.0);
-    const double lift_velocity = current_leg == leg ? lift_velocity_mps :
+    const double lift = common_z_m + (current_leg == leg ? lift_m :
+        (current_leg == diagonal_support_leg ? diagonal_support_z_m : 0.0));
+    const double lift_velocity = common_z_velocity_mps +
+        (current_leg == leg ? lift_velocity_mps :
         (current_leg == diagonal_support_leg ?
-             diagonal_support_z_velocity_mps : 0.0);
+             diagonal_support_z_velocity_mps : 0.0));
+    const double stance_sign =
+        (current_leg == 0 || current_leg == 2) ? -1.0 : 1.0;
     const CartesianLegJointTarget target = SampleLite3CartesianLeg(
         0.0, kStandHipY, kStandKnee, current_leg,
-        shift_x_m, shift_y_m, lift,
-        shift_x_velocity_mps, shift_y_velocity_mps, lift_velocity);
+        shift_x_m, shift_y_m + stance_sign * stance_y_m, lift,
+        shift_x_velocity_mps,
+        shift_y_velocity_mps + stance_sign * stance_y_velocity_mps,
+        lift_velocity);
     if (!target.valid) return false;
     auto& hip_x = command->joint_cmd[3 * current_leg];
     auto& hip_y = command->joint_cmd[3 * current_leg + 1];
@@ -567,7 +578,10 @@ struct Watchdog {
   void CompleteNormally() {
     if (notify_fd >= 0) {
       const char done = 'D';
-      (void)write(notify_fd, &done, 1);
+      const ssize_t written = write(notify_fd, &done, 1);
+      if (written != 1) {
+        std::cerr << "warning: failed to notify release watchdog" << std::endl;
+      }
       close(notify_fd);
       notify_fd = -1;
     }
@@ -781,7 +795,12 @@ bool RunPawLiftSegment(const std::string& name, int leg, double start_lift,
                        RobotCmd* command, FeedbackPauseStats* pause_stats,
                        FootLoadMonitor* monitor, StopSource* stop_source,
                        ExpressionStatus* status,
-                       SequenceRecordWriter* status_writer) {
+                       SequenceRecordWriter* status_writer,
+                       double start_common_z = 0.0,
+                       double end_common_z = 0.0,
+                       double start_stance_y = 0.0,
+                       double end_stance_y = 0.0,
+                       const std::function<void()>& observe_request = {}) {
   bool estimator_fault = false;
   status->phase = name;
   PublishExpressionStatus(status_writer, *status);
@@ -802,15 +821,22 @@ bool RunPawLiftSegment(const std::string& name, int leg, double start_lift,
             elapsed, duration, start_shift_y, end_shift_y);
         const BreathScalar support_z = QuinticBreathSegment(
             elapsed, duration, start_support_z, end_support_z);
+        const BreathScalar common_z = QuinticBreathSegment(
+            elapsed, duration, start_common_z, end_common_z);
+        const BreathScalar stance_y = QuinticBreathSegment(
+            elapsed, duration, start_stance_y, end_stance_y);
         if (!SetPawLiftCommand(output, leg, lift.position, lift.velocity,
                                shift_x.position, shift_y.position,
                                shift_x.velocity, shift_y.velocity,
-                               support_z.position, support_z.velocity)) {
+                               support_z.position, support_z.velocity,
+                               common_z.position, common_z.velocity,
+                               stance_y.position, stance_y.velocity)) {
           estimator_fault = true;
           return;
         }
         monitor->Update(data.tick, EstimateFootForces(data));
         UpdateEstimatedContactStatus(*monitor, status);
+        if (observe_request) observe_request();
         bool stop = false;
         double stop_age = INFINITY;
         if (!stop_source->Read(&stop, &stop_age) || stop_age > 0.25 || stop) {
@@ -971,6 +997,229 @@ bool RunJoyPawTest(Sender* sender, FeedbackSource* receiver,
   return true;
 }
 
+bool RunAngerStompTest(Sender* sender, FeedbackSource* receiver,
+                       RobotStateSource* robot_state, RobotCmd* command,
+                       FeedbackPauseStats* pause_stats,
+                       FootLoadMonitor* monitor, StopSource* stop_source,
+                       SequenceRecordWriter* status_writer,
+                       ExpressionStatus* status, double test_lift,
+                       int first_leg, bool alternating_suite,
+                       AngerRetargetTracker* retarget_tracker = nullptr,
+                       EmotionSource* emotion_source = nullptr) {
+  constexpr double kDiagonalSupportZ = 0.0;
+  const bool chat_runtime = retarget_tracker != nullptr && emotion_source != nullptr;
+  if ((retarget_tracker == nullptr) != (emotion_source == nullptr)) {
+    status->last_fault = "incomplete anger chat-retarget configuration";
+    return false;
+  }
+  if (!AngerStompLimitsValid(test_lift) ||
+      !monitor->baseline_valid() || monitor->support_count() != 4) {
+    std::cerr << "ABORT anger test requires valid bounds and four-foot baseline"
+              << std::endl;
+    return false;
+  }
+  status->requested = "anger";
+  status->active = "anger";
+  status->estimated_contact_motion_gate_enabled = true;
+  PublishExpressionStatus(status_writer, *status);
+  const std::function<void()> observe_request = [&]() {
+    if (!chat_runtime) return;
+    const EmotionState observed = emotion_source->GetState();
+    retarget_tracker->Observe(
+        observed.valid, observed.age_seconds <= kEmotionTimeoutSeconds,
+        observed.transport_sequence, observed.emotion,
+        observed.valence, observed.arousal);
+    status->link_age = observed.age_seconds;
+    status->requested = retarget_tracker->emotion();
+    status->pending = retarget_tracker->cancellation_requested()
+        ? retarget_tracker->emotion() : "";
+  };
+  observe_request();
+  std::cout << "ANGER_TOUCHDOWN_BOUNDS lift_m=" << test_lift
+            << " max_downward_velocity_mps="
+            << QuinticMaximumSpeed(test_lift, kAngerLowerSeconds)
+            << " max_downward_acceleration_mps2="
+            << QuinticMaximumAcceleration(test_lift, kAngerLowerSeconds)
+            << " landing_dwell_s=" << kAngerLandingDwellSeconds
+            << std::endl;
+
+  bool okay = RunPawLiftSegment(
+      "anger_brace", first_leg, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+      0.0, kDiagonalSupportZ, kAngerBraceSeconds,
+      sender, receiver, robot_state, command, pause_stats, monitor,
+      stop_source, status, status_writer,
+      0.0, kAngerBraceMeters, 0.0, kAngerStanceMeters,
+      observe_request);
+
+  const int stomp_count = alternating_suite ? 2 : 1;
+  bool gate_failure = false;
+  double current_shift_x = 0.0;
+  double current_shift_y = 0.0;
+  double current_common_z = okay ? kAngerBraceMeters : 0.0;
+  double current_stance_y = okay ? kAngerStanceMeters : 0.0;
+  AngerStompGate stomp_gate;
+  for (int stomp = 0; okay && stomp < stomp_count; ++stomp) {
+    if (chat_runtime && !retarget_tracker->may_start_next_stomp()) break;
+    if (!stomp_gate.BeginStomp()) {
+      status->last_fault = "anger second stomp blocked before landing dwell";
+      gate_failure = true;
+      break;
+    }
+    const int leg = stomp == 0 ? first_leg : 1 - first_leg;
+    const std::string side = leg == 0 ? "front_left" : "front_right";
+    const double support_shift_x = leg == 0 ? 0.020 : 0.035;
+    const double support_shift_y = leg == 0 ? -0.020 : 0.020;
+    okay = RunPawLiftSegment(
+        "anger_transfer_lift_" + side, leg, 0.0, test_lift,
+        current_shift_x, support_shift_x,
+        current_shift_y, support_shift_y,
+        kDiagonalSupportZ, kDiagonalSupportZ, kAngerLiftSeconds,
+        sender, receiver, robot_state, command, pause_stats, monitor,
+        stop_source, status, status_writer,
+        current_common_z, kAngerBraceMeters,
+        current_stance_y, kAngerStanceMeters,
+        observe_request);
+    if (okay) {
+      current_common_z = kAngerBraceMeters;
+      current_stance_y = kAngerStanceMeters;
+    }
+    const bool unload_confirmed = okay && !monitor->loaded(leg) &&
+        OtherPawSupportsValid(*monitor, leg);
+    std::cout << "ANGER_UNLOAD side=" << side
+              << " confirmed=" << (unload_confirmed ? "true" : "false")
+              << " force_n=" << monitor->filtered()[leg]
+              << " support_count=" << monitor->support_count() << std::endl;
+
+    // A missed unload still completes the bounded lowering and landing dwell.
+    // A runtime estimator/STOP/feedback fault does not start another phase.
+    if (okay) {
+      okay = RunPawLiftSegment(
+          "anger_controlled_place_" + side, leg, test_lift, 0.0,
+          support_shift_x, support_shift_x,
+          support_shift_y, support_shift_y,
+          kDiagonalSupportZ, kDiagonalSupportZ, kAngerLowerSeconds,
+          sender, receiver, robot_state, command, pause_stats, monitor,
+          stop_source, status, status_writer,
+          kAngerBraceMeters, kAngerBraceMeters,
+          kAngerStanceMeters, kAngerStanceMeters,
+          observe_request);
+    }
+    if (okay) {
+      okay = RunPawLiftSegment(
+          "anger_landing_dwell_" + side, leg, 0.0, 0.0,
+          support_shift_x, support_shift_x,
+          support_shift_y, support_shift_y,
+          kDiagonalSupportZ, kDiagonalSupportZ, kAngerLandingDwellSeconds,
+          sender, receiver, robot_state, command, pause_stats, monitor,
+          stop_source, status, status_writer,
+          kAngerBraceMeters, kAngerBraceMeters,
+          kAngerStanceMeters, kAngerStanceMeters,
+          observe_request);
+    }
+    if (okay) {
+      // Do not judge restored support in the unloading/brace posture. Keep the
+      // paw planted and return all Cartesian offsets to exact canonical stand.
+      okay = RunPawLiftSegment(
+          "anger_four_foot_relatch_" + side, leg, 0.0, 0.0,
+          support_shift_x, 0.0, support_shift_y, 0.0,
+          kDiagonalSupportZ, kDiagonalSupportZ, kAngerRelatchSeconds,
+          sender, receiver, robot_state, command, pause_stats, monitor,
+          stop_source, status, status_writer,
+          kAngerBraceMeters, 0.0,
+          kAngerStanceMeters, 0.0,
+          observe_request);
+    }
+    if (okay) {
+      current_shift_x = 0.0;
+      current_shift_y = 0.0;
+      current_common_z = 0.0;
+      current_stance_y = 0.0;
+      okay = RunPawLiftSegment(
+          "anger_four_foot_hold_" + side, leg, 0.0, 0.0,
+          0.0, 0.0, 0.0, 0.0,
+          kDiagonalSupportZ, kDiagonalSupportZ,
+          kAngerRelatchHoldSeconds,
+          sender, receiver, robot_state, command, pause_stats, monitor,
+          stop_source, status, status_writer,
+          0.0, 0.0, 0.0, 0.0, observe_request);
+    }
+    const bool landing_confirmed = okay && monitor->loaded(leg) &&
+        monitor->support_count() == 4;
+    stomp_gate.CompleteLanding(
+        landing_confirmed, okay ? kAngerLandingDwellSeconds : 0.0);
+    std::cout << "ANGER_LANDING side=" << side
+              << " confirmed=" << (landing_confirmed ? "true" : "false")
+              << " force_n=" << monitor->filtered()[leg]
+              << " support_count=" << monitor->support_count()
+              << " forces_n=" << monitor->filtered()[0] << ','
+              << monitor->filtered()[1] << ',' << monitor->filtered()[2]
+              << ',' << monitor->filtered()[3]
+              << " dwell_s=" << kAngerLandingDwellSeconds << std::endl;
+    if (!okay || !unload_confirmed || !landing_confirmed) {
+      status->last_fault = "anger unload or four-foot landing dwell failed";
+      gate_failure = true;
+      break;
+    }
+  }
+
+  bool hold_okay = okay;
+  bool recover_okay = false;
+  const bool retargeting = chat_runtime &&
+      retarget_tracker->cancellation_requested();
+  if (okay && !gate_failure && !retargeting) {
+    hold_okay = RunPawLiftSegment(
+        "anger_assertive_hold", first_leg, 0.0, 0.0,
+        current_shift_x, 0.0, current_shift_y, 0.0,
+        kDiagonalSupportZ, kDiagonalSupportZ,
+        kAngerHoldSeconds, sender, receiver, robot_state, command, pause_stats,
+        monitor, stop_source, status, status_writer,
+        current_common_z, kAngerBraceMeters,
+        current_stance_y, kAngerStanceMeters,
+        observe_request);
+    if (hold_okay) {
+      current_common_z = kAngerBraceMeters;
+      current_stance_y = kAngerStanceMeters;
+    }
+  }
+  if (okay && hold_okay) {
+    const double recovery_seconds = chat_runtime
+        ? ExpressionEngine::kNeutralReturnSeconds : kAngerRecoverSeconds;
+    recover_okay = RunPawLiftSegment(
+        "anger_recover", first_leg, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, kDiagonalSupportZ, 0.0,
+        recovery_seconds, sender, receiver, robot_state, command,
+        pause_stats, monitor, stop_source, status, status_writer,
+        current_common_z, 0.0, current_stance_y, 0.0,
+        observe_request);
+  }
+  bool neutral_hold_okay = true;
+  if (recover_okay && chat_runtime &&
+      retarget_tracker->cancellation_requested()) {
+    neutral_hold_okay = RunPawLiftSegment(
+        "anger_neutral_hold", first_leg, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, kDiagonalSupportZ, 0.0,
+        ExpressionEngine::kNeutralHoldSeconds,
+        sender, receiver, robot_state, command, pause_stats, monitor,
+        stop_source, status, status_writer,
+        0.0, 0.0, 0.0, 0.0, observe_request);
+  }
+  const bool four_feet_recovered = recover_okay && neutral_hold_okay &&
+      monitor->support_count() == 4;
+  const bool transition_complete = chat_runtime &&
+      retarget_tracker->cancellation_requested();
+  status->active = chat_runtime && !transition_complete ? "anger" : "neutral";
+  status->phase = transition_complete
+      ? "anger_external_neutral_complete" : "anger_test_complete";
+  status->estimated_contact_motion_gate_enabled = false;
+  if (!four_feet_recovered && status->last_fault.empty()) {
+    status->last_fault = "anger exact recovery did not restore four-foot support";
+  }
+  PublishExpressionStatus(status_writer, *status);
+  return okay && !gate_failure && hold_okay && recover_okay &&
+      neutral_hold_okay &&
+      four_feet_recovered;
+}
+
 bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissioned,
                        double profile_scale, Sender* sender,
                        FeedbackSource* receiver, RobotStateSource* robot_state,
@@ -989,6 +1238,8 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
   uint32_t recovery_last_tick = 0;
   int recovery_samples = 0;
   uint64_t last_transport_sequence = 0;
+  uint64_t anger_profile_cycle = 0;
+  bool anger_runtime_active = false;
   RobotCmd hold_command = *command;
   int tick = 0;
   status->phase = "profile";
@@ -1079,6 +1330,66 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
             std::chrono::duration<double>(now - last_trajectory_tick).count(),
             kMaxTrajectoryStepSeconds);
         last_trajectory_tick = now;
+        if (engine.active() == "anger" && engine.phase() == "profile") {
+          if (!anger_runtime_active) {
+            anger_runtime_active = true;
+            anger_profile_cycle = 0;
+          }
+          status->requested = engine.requested();
+          status->active = "anger";
+          status->phase = "anger_runtime";
+          status->profile_cycle = anger_profile_cycle;
+          status->pending.clear();
+          PublishExpressionStatus(status_writer, *status);
+
+          AngerRetargetTracker retarget(last_transport_sequence);
+          const double runtime_lift = std::max(
+              0.010, kAngerLiftMeters * profile_scale);
+          const bool anger_okay = RunAngerStompTest(
+              sender, receiver, robot_state, command, pause_stats,
+              foot_load_monitor, stop_source, status_writer, status,
+              runtime_lift, static_cast<int>(anger_profile_cycle % 2), true,
+              &retarget, emotion_source);
+          last_transport_sequence = retarget.last_sequence();
+          const auto after_action = std::chrono::steady_clock::now();
+          last_trajectory_tick = after_action;
+          next = after_action;
+          hold_command = *command;
+          if (!anger_okay) return false;
+
+          if (retarget.cancellation_requested()) {
+            anger_runtime_active = false;
+            if (retarget.stale()) {
+              stale_latched = true;
+              status->requested = "neutral";
+              status->active = "neutral";
+              status->pending.clear();
+              status->release_state = "stale_link_release";
+              PublishExpressionStatus(status_writer, *status);
+              return true;
+            }
+            engine.CompleteExternalNeutralTransition(
+                retarget.emotion(), retarget.valence(), retarget.arousal(),
+                trajectory_time);
+          } else {
+            ++anger_profile_cycle;
+          }
+
+          status->requested = engine.requested();
+          status->active = engine.active();
+          status->phase = engine.phase();
+          status->profile_cycle = anger_runtime_active
+              ? anger_profile_cycle : engine.profile_cycle();
+          status->pending = engine.pending();
+          PublishExpressionStatus(status_writer, *status);
+          ++tick;
+          next += std::chrono::milliseconds(1);
+          std::this_thread::sleep_until(next);
+          continue;
+        }
+        if (engine.phase() != "profile" || engine.active() != "anger") {
+          anger_runtime_active = false;
+        }
         const ExpressionSample sample = engine.Sample(trajectory_time);
         SetStandCommand(command, sample);
         if (tick > 50 && TrackingError(*command, snapshot) > kHoldErrorLimit) {
@@ -1092,7 +1403,8 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
     status->requested = engine.requested();
     status->active = engine.active();
     status->phase = engine.phase();
-    status->profile_cycle = engine.profile_cycle();
+    status->profile_cycle = anger_runtime_active
+        ? anger_profile_cycle : engine.profile_cycle();
     status->pending = engine.pending();
     if (tick % 20 == 0) PublishExpressionStatus(status_writer, *status);
     if (stale_latched && engine.stale_reset_complete()) {
@@ -1121,7 +1433,12 @@ int main(int argc, char** argv) {
   bool continuous = false;
   bool joy_paw_test = false;
   bool joy_suite_test = false;
+  bool anger_stomp_test = false;
+  bool anger_suite_test = false;
+  int anger_suite_cycles = 1;
+  int anger_first_leg = 0;
   double paw_lift_meters = 0.005;
+  double anger_lift_meters = kAngerLiftMeters;
   double profile_scale = 1.0;
   std::set<std::string> commissioned{"neutral"};
   ScopedPidFile pid_file;
@@ -1129,6 +1446,20 @@ int main(int argc, char** argv) {
   uint16_t target_port = 43893;
   for (int i = 1; i < argc; ++i) {
     const std::string argument(argv[i]);
+    if (argument == "--help") {
+      std::cout << "usage: " << argv[0]
+                << " [--execute] [--continuous] [--target-ip=IP]"
+                << " [--target-port=PORT] [--profile-scale=0..1]"
+                << " [--minimum-battery=PERCENT]"
+                << " [--commissioned-emotions=neutral,...] [--pid-file=PATH]"
+                << " [--joy-paw-test] [--joy-suite-test]"
+                << " [--paw-lift-meters=0.003..0.050]"
+                << " [--anger-single-stomp-test] [--anger-suite-test]"
+                << " [--anger-suite-cycles=1..3]"
+                << " [--anger-first-paw=left|right]"
+                << " [--anger-lift-meters=0.010..0.035]\n";
+      return 0;
+    }
     if (argument == "--execute") execute = true;
     else if (argument == "--continuous") continuous = true;
     else if (argument == "--joy-paw-test") joy_paw_test = true;
@@ -1136,8 +1467,23 @@ int main(int argc, char** argv) {
       joy_paw_test = true;
       joy_suite_test = true;
     }
+    else if (argument == "--anger-single-stomp-test") {
+      anger_stomp_test = true;
+    }
+    else if (argument == "--anger-suite-test") {
+      anger_stomp_test = true;
+      anger_suite_test = true;
+    }
+    else if (argument.rfind("--anger-suite-cycles=", 0) == 0) {
+      anger_suite_cycles = std::stoi(argument.substr(21));
+    }
+    else if (argument == "--anger-first-paw=left") anger_first_leg = 0;
+    else if (argument == "--anger-first-paw=right") anger_first_leg = 1;
     else if (argument.rfind("--paw-lift-meters=", 0) == 0) {
       paw_lift_meters = std::stod(argument.substr(18));
+    }
+    else if (argument.rfind("--anger-lift-meters=", 0) == 0) {
+      anger_lift_meters = std::stod(argument.substr(20));
     }
     else if (argument.rfind("--target-ip=", 0) == 0) target_ip = argument.substr(12);
     else if (argument.rfind("--target-port=", 0) == 0) {
@@ -1167,7 +1513,11 @@ int main(int argc, char** argv) {
                 << " [--minimum-battery=PERCENT]"
                 << " [--commissioned-emotions=neutral,...] [--pid-file=PATH]"
                 << " [--joy-paw-test] [--joy-suite-test]"
-                << " [--paw-lift-meters=0.003..0.050]\n";
+                << " [--paw-lift-meters=0.003..0.050]"
+                << " [--anger-single-stomp-test] [--anger-suite-test]"
+                << " [--anger-suite-cycles=1..3]"
+                << " [--anger-first-paw=left|right]"
+                << " [--anger-lift-meters=0.010..0.035]\n";
       return 2;
     }
   }
@@ -1181,6 +1531,21 @@ int main(int argc, char** argv) {
   }
   if (!(paw_lift_meters >= 0.003 && paw_lift_meters <= 0.050)) {
     std::cerr << "paw lift must be in [0.003, 0.050] metres" << std::endl;
+    return 2;
+  }
+  if (!AngerStompLimitsValid(anger_lift_meters)) {
+    std::cerr << "anger lift or touchdown bounds are invalid" << std::endl;
+    return 2;
+  }
+  if (joy_paw_test && anger_stomp_test) {
+    std::cerr << "joy and anger commissioning modes are mutually exclusive"
+              << std::endl;
+    return 2;
+  }
+  if (anger_suite_cycles < 1 || anger_suite_cycles > 3 ||
+      (!anger_suite_test && anger_suite_cycles != 1)) {
+    std::cerr << "anger suite cycles must be 1..3 and require suite mode"
+              << std::endl;
     return 2;
   }
 
@@ -1370,6 +1735,20 @@ int main(int argc, char** argv) {
             &sender, &receiver, &robot_state, &command, &pause_stats,
             &foot_load_monitor, &stop_source, &status_writer, &status,
             paw_lift_meters, joy_suite_test);
+      }
+    } else if (anger_stomp_test) {
+      okay = RunNeutralTestWindow(
+          &sender, &receiver, &robot_state, &command, &pause_stats,
+          &foot_load_monitor, &stop_source, &status_writer, &status);
+      if (okay) {
+        for (int cycle = 1; okay && cycle <= anger_suite_cycles; ++cycle) {
+          std::cout << "ANGER_SUITE_CYCLE cycle=" << cycle
+                    << " total=" << anger_suite_cycles << std::endl;
+          okay = RunAngerStompTest(
+              &sender, &receiver, &robot_state, &command, &pause_stats,
+              &foot_load_monitor, &stop_source, &status_writer, &status,
+              anger_lift_meters, anger_first_leg, anger_suite_test);
+        }
       }
     } else {
       okay = RunExpressionLoop(
