@@ -1,0 +1,12 @@
+<launch>
+  <arg name="config" default="$(find emotion_bot_lite3_hw)/config/default.yaml"/>
+  <rosparam command="load" file="$(arg config)" ns="emotion_bot/hardware"/>
+  <!-- This graph is deliberately separate from the official continuous
+       MotionSDK owner. Every transmitter remains fail-closed by default. -->
+  <node pkg="emotion_bot_lite3_hw" type="hardware_mapper.py" name="mapper" ns="emotion_bot/hardware" output="screen" required="true"/>
+  <node pkg="emotion_bot_lite3_hw" type="safety_supervisor.py" name="supervisor" ns="emotion_bot/hardware" output="screen" required="true"/>
+  <node pkg="emotion_bot_lite3_hw" type="posture_bridge.py" name="posture_bridge" ns="emotion_bot/hardware" output="screen" required="true"/>
+  <node pkg="emotion_bot_lite3_hw" type="action_controller.py" name="action_controller" ns="emotion_bot/hardware" output="screen">
+    <param name="config_path" value="$(arg config)"/>
+  </node>
+</launch>

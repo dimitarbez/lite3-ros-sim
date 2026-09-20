@@ -10,6 +10,7 @@ import rospy
 from std_msgs.msg import String
 
 from emotion_bot_lite3_hw.transport import MAX_FRAME_BYTES, SequenceGate, TransportError, decode_frame
+from emotion_bot_lite3_hw.shared_memory import SharedTelemetry, encode_emotion_record
 
 
 class EmotionReceiver:
@@ -22,6 +23,10 @@ class EmotionReceiver:
         self.connection_lock = threading.Lock()
         self.connection_generation = 0
         self.last_receive = None
+        shared_path = rospy.get_param(
+            "~shared_memory_path", "/dev/shm/emotion_bot_lite3_emotion_state"
+        )
+        self.shared = SharedTelemetry(shared_path, create=True)
         self.pub = rospy.Publisher("/emotion_bot/hardware/emotion_state", String, queue_size=10, latch=True)
         self.link_pub = rospy.Publisher("/emotion_bot/hardware/link", String, queue_size=10, latch=True)
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -29,9 +34,16 @@ class EmotionReceiver:
         self.server.bind((self.host, self.port))
         self.server.listen(2)
         self.server.settimeout(0.25)
-        rospy.on_shutdown(self.server.close)
+        rospy.on_shutdown(self.close)
         threading.Thread(target=self.accept_loop, daemon=True).start()
         rospy.Timer(rospy.Duration(0.1), self.publish_link)
+
+    def close(self):
+        try:
+            self.server.close()
+        except OSError:
+            pass
+        self.shared.close()
 
     def accept_loop(self):
         while not rospy.is_shutdown():
@@ -82,10 +94,12 @@ class EmotionReceiver:
                     except TransportError as exc:
                         rospy.logwarn("Rejected emotion frame: %s", exc)
                         continue
+                    if not self.gate.accept(envelope):
+                        continue
                     sequence = envelope["sequence"]
-                    self.gate.session_id = session_id
-                    self.gate.sequence = sequence
-                    self.last_receive = time.monotonic()
+                    receive_ns = time.monotonic_ns()
+                    self.last_receive = receive_ns * 1e-9
+                    self.shared.write(receive_ns, encode_emotion_record(envelope))
                     self.pub.publish(String(data=json.dumps(envelope["payload"], sort_keys=True, separators=(",", ":"))))
 
     def publish_link(self, _event):

@@ -926,6 +926,205 @@ still present because the operator accepted the motion and had previously asked
 that it keep looping. All fault paths, including fresh state `8`, remained armed
 to release without retry or routine STOP.
 
+### Nine-category planted runtime implementation — 2026-09-20
+
+The software-only follow-up generalized the proven runner into
+`motion_sdk_expression_runner` without changing its sitting-to-stand sequence,
+1 kHz ownership, feedback pause/recovery thresholds, tracking limit, state/error
+interlock, or crash-release watchdog. This work was performed in the wrapper
+working tree based on `a3fee6db1ed5e133db1bc83a86cead4c7d7f37a9`; it was not
+deployed to or executed against the robot in this task.
+
+The validated state-1.1/transport-1.0 receiver now writes category, valence,
+arousal, turn ID, session and both sequences to a versioned sequence-locked
+record. A separate authenticated STOP record feeds the ROS-independent runner.
+The runner writes a read-only status record which the core publishes as JSON
+schema `1.0` on `/emotion_bot/hardware/expression_status`.
+
+All nine physical profiles are declarative quintic compression/roll/pitch
+keyframes. Neutral is exactly the commissioned 3.25-second animal profile. The
+other eight preserve the Gazebo transition/idle order with each duration set to
+at least 0.75 seconds and twice its effective Gazebo duration. Positive height
+maps to at most `-0.008 rad`, negative height to at most `+0.020 rad`, roll to
+`+/-0.004 rad`, pitch to `+/-0.003 rad`, and knee displacement/velocity remains
+twice combined HipY compression. Hop markers are planted crouch-rise-neutral
+pulses; stomp markers are symmetric double-compression pulses.
+
+Every category switch, including neutral to non-neutral, cancels the old loop,
+returns from its current position/velocity/acceleration to exact stand in 1.5
+seconds, holds 0.35 seconds, then starts the newest pending profile. A same-
+category update changes affect metadata without restarting. A stale 0.75-second
+emotion link performs the reset and then releases control; STOP and other safety
+faults release immediately. Only `neutral` is allowed by default. The staged
+commissioning order remains affection, curiosity, sadness, disgust, fear, joy
+proxy, surprise proxy, and anger proxy, at 25%, 50%, 75%, then 100% scale with
+at least two loops per step.
+
+The old Retroid-compatible bridge and legacy posture/action nodes moved behind
+the explicit `run-emotion-hardware-retroid-diagnostic` /
+`hardware_diagnostic.launch` path. They remain fail closed and reject concurrent
+official/direct-joint ownership. True airborne hops and lifted-foot stomps were
+not added.
+
+#### Connected deployment preflight — 2026-09-20
+
+After explicit reconnection authorization, the official MotionSDK at clean
+commit `b30a3ec09619e1dd0f3cfa6c49a50eb59670f141` and this working tree were
+staged on the perception host. The first actual aarch64 compile exposed one
+stub-only assumption: the official `RobotCmd::joint_cmd` is a fixed C array,
+not a container with `.size()`. The runner was corrected to use the array's
+compile-time extent. Its clean Release ARM build and all three standalone
+expression/safety tests then passed.
+
+The new core launch was loaded without starting the runner. The authenticated
+motion-host observer was fresh, its axes were centered, STOP was false, robot
+error flags were zero, attitude was level, the SDK layout was compatible, and
+there was no existing command owner or ownership marker. Battery was `71%`.
+The robot nevertheless reported basic state `98`, which is absent from the
+reviewed state table and does not satisfy the runner's exact state-`1`
+precondition. A no-command preflight invocation rejected the run before sender
+construction. No MotionSDK acquisition or physical movement occurred.
+
+#### Restrained neutral-to-joy test at 25% — 2026-09-20
+
+The operator returned the robot to state `1` and reconfirmed the physical
+safety setup. One continuous official-owner session then used the temporary
+allowlist `neutral,joy` at scale `0.25`. Preflight showed gait/motion `0/0`,
+battery `69%`, errors `0`, level attitude, fresh authenticated Retroid
+observation with centered axes and STOP false, and no competing owner.
+
+The runner completed `RobotStateInit`, `PreStandUp`, `StandUp`, and the exact
+stand hold. It ran at least 41 neutral cycles before a deterministic
+EmotionBot turn produced joy (`valence=0.7`, `arousal=0.6`). Joy became active
+under the same uninterrupted SDK owner and completed at least 33 cycles before
+operator termination. During an eight-second joy window, 762 high-rate samples
+showed maximum spans of `0.0013733 rad` HipX, `0.0067139 rad` HipY, and
+`0.0080109 rad` knee, with maximum absolute joint velocity
+`0.2363205 rad/s`. Robot state stayed `1`, errors stayed zero, roll remained
+within `-0.015..+0.107 deg`, pitch within `-0.233..-0.095 deg`, and high-rate
+feedback remained healthy. Reported temperature fields were all zero and are
+therefore not temperature evidence.
+
+Ctrl-C performed the normal release. The full session observed eight feedback
+pauses, all eight recovered; maximum age/gap was `150.120/151.024 ms` and the
+longest pause was `74.037 ms`. No safety fault occurred. After release the
+robot was in state `1` with errors `0`, STOP false, no runner, and no ownership
+marker.
+
+This establishes only the `25%` joy step. Four-feet-planted visual acceptance
+and the `50%`, `75%`, and `100%` steps are still required before adding joy to
+the checked-in commissioned allowlist. Neutral therefore remains the default.
+
+#### Operator-accepted neutral-to-joy test at 100% — 2026-09-20
+
+Because the operator could not visually distinguish 25% joy from breathing,
+the operator explicitly requested the full validated envelope. A second fresh
+preflight showed state/gait/motion `1/0/0`, battery `65%`, errors `0`, level
+attitude, fresh authenticated Retroid observation, centered axes, STOP false,
+and no owner. The runner completed initialization and seven neutral cycles,
+then changed to joy without releasing SDK ownership.
+
+Joy reached cycle 18. An eight-second window containing 760 high-rate samples
+showed maximum spans of `0.0018311 rad` HipX, `0.0418091 rad` HipY, and
+`0.0580597 rad` knee, with maximum absolute velocity `0.3550339 rad/s`. State
+remained `1`, errors remained zero, roll stayed within
+`-0.460..+0.458 deg`, pitch within `-0.881..-0.017 deg`, and feedback remained
+healthy. The operator reported that the result looked good, accepting the
+full-scale joy expression visually.
+
+Normal signal termination released cleanly. Three feedback pauses all
+recovered; maximum age/gap was `150.478/145.420 ms` and the longest pause was
+`78.007 ms`. Post-release state was `1`, battery `64%`, errors `0`, STOP false,
+with no runner or ownership marker.
+
+The operator-requested jump from `25%` to `100%` skipped the planned `50%` and
+`75%` checkpoints. Consequently this acceptance is recorded without silently
+widening the checked-in default allowlist, which remains neutral-only pending
+those steps or an explicit waiver.
+
+#### Stronger recurrent joy proxy and contact contradiction — 2026-09-20
+
+The operator next requested stronger joy and the hop seen in Gazebo. Joy now
+repeats the planted crouch-rise-neutral proxy in every idle loop and reaches the
+existing stage-one compression/roll/pitch endpoints; it does not widen the
+joint envelope or lift a foot. The complete offline hardware gate and the real
+aarch64 MotionSDK build passed. A fresh full-scale live run completed at least
+six revised joy cycles from state `1` with zero errors and no reported runner
+fault. Ctrl-C released cleanly after one recovered feedback pause; post-release
+state was `1`, battery `59%`, errors `0`, STOP false, and no owner.
+
+That run exposed a hard stage-two blocker: during official SDK ownership all 12
+decoded contact values were exactly zero while the robot was standing. This
+contradicts the earlier passive standing sample with negative vertical values,
+so contact is mode-dependent or otherwise not reliable enough to prove flight
+and landing. `contact_feedback_available` is now fail-closed at `false`.
+
+The operator reported that STOP preemption works, but this session did not
+capture a new response-time measurement. The official MotionSDK contains no hop
+primitive. The vendor motion-host interface has Long Jump and Twist Jump action
+commands, but those belong to a different controller/ownership path and are not
+substitutable inside the continuous joint owner. Gazebo's hop is a simulator
+body-height trajectory, not a calibrated physical joint trajectory. No
+airborne command was sent or enabled.
+
+#### Visually rejected planted front-paw experiment — 2026-09-20
+
+The operator clarified that the target was alternating happy-dog front-paw
+stomping rather than a hop. A bounded profile alternated stronger left/right
+front-shoulder compression with exact-neutral beats while every leg remained
+at or above neutral compression. The complete offline gate and the real
+aarch64 MotionSDK build passed; installed runner SHA-256 was
+`135cad0d909ca13e10865bb9a5860538a9069e8087af64f8eb125f9955dc6894`.
+
+A fresh full-scale state-1 session completed at least 24 joy loops with errors
+`0`, healthy sampled high-rate feedback, and no runner fault. Four feedback
+pauses all recovered; maximum age/update gap was `155.202/155.775 ms` and
+maximum pause was `77.9819 ms`. Normal termination released with no safety
+fault. Post-release state was `1`, battery `55%`, errors `0`, STOP false,
+centered axes, and no ownership marker.
+
+The operator saw no recognizable joy and specifically rejected the fully
+planted result. Follow-up inspection found no separate foot-contact ROS topic;
+vendor `/joint_states` also publishes empty velocity and effort arrays. With
+the MotionSDK contact block already observed as all zero during official
+ownership, there is no reliable unload/landing observation for a lifted paw.
+No open-loop lifted-foot command was sent, and the experimental joy profile is
+not commissioned. It was reverted after the test so the source and deployed
+runner retain the previously operator-accepted stage-one joy choreography.
+
+#### Read-only torque-derived contact estimator — 2026-09-20
+
+The official SDK joint feedback does contain nonzero motor torque even though
+its `contact_force[12]` block is zero under SDK ownership. A ROS- and
+SDK-independent estimator now applies the maintained Lite3 kinematic model and
+solves `J(q)^T F = tau` for each leg. A recorded four-feet-planted sample from
+the rejected joy session produced vertical loads of
+`23.44/24.34/31.23/35.73 N`, totaling `114.74 N`; the configured robot weight
+is approximately `116.15 N`. This close result makes the signal a candidate
+for calibration, not proof that it reliably detects physical unload or landing.
+
+The runner collects a stable distinct-tick standing baseline and publishes the
+filtered loads, baselines, validity, and support count in the read-only
+`estimated_contact` expression-status object. It explicitly publishes
+`motion_gate_enabled=false`, and no trajectory reads the estimate. The fourth
+native C++ suite covers the recorded fixture, duplicate ticks, baseline bounds,
+unload/landing hysteresis, non-finite data, and singular kinematics. The full
+offline hardware gate passed with four native suites and 29 Python tests. No
+robot execution or new physical movement was performed for this estimator. The
+same source then compiled successfully against the perception computer's actual
+aarch64 MotionSDK and all four suites passed there. It was installed, but not
+started, with SHA-256
+`4f4e9393a951d965cc1b603974fa21e996f78d395241ddbc7382ab4a2d9abc97`;
+the prior runner SHA-256
+`057babd3738f8ea240a0ccf1bbc5a96bb0999fa4e745a849ffdd2120baffcd97`
+was retained as a checksum-named backup. SDK ownership remained absent.
+
+The proposed excited-dog gesture is now specified separately in
+[`TICKET_JOY_FRONT_PAW.md`](../../tickets/TICKET_JOY_FRONT_PAW.md): a
+support shift, low-clearance front-paw lift, confirmed unload, gentle landing,
+exact-neutral recovery, and then the opposite paw. Read-only restrained
+calibration is required before implementing or enabling that state machine.
+
 ### Remaining work
 
 - Keep `direct_joint.takeover_transition_commissioned=false`; do not retry
@@ -938,19 +1137,26 @@ to release without retry or routine STOP.
 - Retain the measured two-stage `0x0906` watchdog. The live feed still produced
   gaps up to `148.665 ms`; do not replace the pause/recovery logic with a larger
   blind trajectory-advance timeout.
-- Keep the repaired robot-side core environment and both persistent transmit
-  flags fail closed; require the supervisor and direct safety topic to remain
-  live before any future fully suspended commissioning attempt.
+- Keep the repaired robot-side core environment and both legacy transmit flags
+  fail closed. The official runner consumes only the validated shared emotion,
+  STOP, `0x0901`, and `0x0906` records.
 - Verify direct-joint STOP preemption under a hoist or equivalent independent
   restraint, with a non-software emergency cutoff and a human operator ready.
-- If those gates pass, begin with a measured-anchor hold-only acquisition before
-  requesting even a scaled neutral compression cycle.
+- Commission each planted category separately in the recorded order; do not add
+  it to `HARDWARE_COMMISSIONED_EMOTIONS` before its evidence is accepted.
 - Re-run the final periodic `0..-10000` profile after the replacement battery is
   installed and record a phase-isolated full-cycle joint span.
 - Treat yaw `32768` as firmware-specific opaque framing and verify it again after
   any app, profile, or Deeprcs update.
-- Keep the checked-in robot-side transmission and breathing flags false; the
-  default direct host bridge remains a separately owned neutral-only path.
+- Keep the checked-in legacy transmission and breathing flags false; the
+  Retroid host bridge remains a separately owned diagnostic-only path.
+- Stage two still requires recorded STOP-preemption timing, a calibrated
+  physical trajectory, and mode-valid contact/flight/landing detection before
+  any airborne hop or lifted-foot stomp implementation.
+- Calibrate the torque-derived estimator in read-only mode under known
+  front-left and front-right unload/landing events. Keep its
+  `motion_gate_enabled` false until the separate front-paw ticket's evidence and
+  acceptance gates are complete.
 
 ## Sources
 

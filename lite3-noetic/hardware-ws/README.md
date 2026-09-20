@@ -4,15 +4,17 @@ This is a separate catkin workspace for the perception computer. It does not
 modify or overlay the vendor `~/lite_cog` workspace or `qnx2ros`. The normal
 `lite3-noetic` simulation image does not launch this package.
 
-The package starts fail closed:
+The legacy diagnostic package starts fail closed:
 
 - `transmit_enabled: false` and `dynamic_actions_enabled: false`;
 - all nine posture amplitudes and rates are zero;
-- the Deeprcs `2.0.153` `0x0906` layout identifier is blank;
+- its posture and dynamic-action transmit flags are false;
 - STOP-preemption is unverified and all action trajectories are empty.
 
-Consequently neither posture nor direct-joint output can arm from the checked-in
-configuration. These fields are commissioning records, not convenience flags.
+Consequently neither legacy posture nor action output can arm from the
+checked-in configuration. The separate official runtime uses the reviewed
+Deeprcs `2.0.153` layout and an independent lease; its default commissioned
+allowlist contains only the already proven neutral profile.
 
 ## One-time fail-closed installation
 
@@ -51,8 +53,10 @@ authenticates the STOP/status relay and is installed outside Git under
   `192.168.1.120:43911`, verifies their HMAC/session/sequence, and publishes the
   local ROS STOP and Retroid-health topics. A stale or lost relay removes the
   arming gate.
-- The mapper, supervisor, posture bridge, and action controller use the
-  `/emotion_bot/hardware/...` namespace. `/simple_cmd` is the sole posture path.
+- The mapper, supervisor, posture bridge, and action controller are excluded
+  from the official core launch. The explicit `hardware_diagnostic.launch`
+  retains them fail closed under `/emotion_bot/hardware/...`; `/simple_cmd` is
+  that diagnostic graph's sole posture path.
 - The passive telemetry tap publishes each perception-to-motion-host UDP command
   observed on `eth0` as inspectable JSON on
   `/emotion_bot/hardware/wire_command`. This topic proves interface-level packet
@@ -66,7 +70,7 @@ authenticates the STOP/status relay and is installed outside Git under
   four back-to-back axis messages lets zero-valued uncommissioned axes evict the
   active height command before the vendor callback runs.
 
-Public services are `/emotion_bot/hardware/set_armed` (`std_srvs/SetBool`),
+Diagnostic services are `/emotion_bot/hardware/set_armed` (`std_srvs/SetBool`),
 `/emotion_bot/hardware/set_dynamic_actions_enabled` (`std_srvs/SetBool`), and
 `/emotion_bot/hardware/neutral` (`std_srvs/Trigger`). Status is latched JSON on
 `/emotion_bot/hardware/status`; robot state is the typed
@@ -97,12 +101,12 @@ development computer's Windows interface `192.168.2.28:43897` to motion host
 The `32768` value is an observed Retroid companion value, outside the documented
 signed yaw posture range. Treat it as opaque compatibility framing: do not scale
 it, interpret it as a requested yaw angle, or generalize it to another firmware.
-The maintained host-side bridge now owns this exact handshake and pairing when
-`run-emotion-hardware` is active. The persistent perception services remain
-`DISARMED` and unable to transmit; the host bridge starts by default, acquires
-an exclusive lock, and acts only while the received emotion is `neutral` and
-every read-only gate remains fresh. A 250 ms relay watchdog and every normal
-exit send five paired yaw/height zeros.
+The diagnostic host-side bridge owns this exact handshake only when
+`run-emotion-hardware-retroid-diagnostic` is explicitly active. It refuses to
+coexist with an official or legacy direct-joint ownership marker, starts the
+separate fail-closed diagnostic graph, and acts only while the received emotion
+is `neutral` and every read-only gate remains fresh. A 250 ms relay watchdog and
+every normal exit send five paired yaw/height zeros.
 
 Phase-isolated testing showed that the earlier `+10000..-3900` waveform spent
 its periodic range inside the deployed controller's effective deadband; its
@@ -117,18 +121,10 @@ The operator explicitly selected a 25% runtime floor; output stops below it and
 resumes only after all gates hold continuously for two seconds. The Pro manual's
 75% start recommendation remains documented separately.
 
-The dynamic controller expects a separately reviewed executable configured as
-`~sdk_sender_path`. That executable must link the official aarch64 MotionSDK,
-own the 1 kHz loop, acquire and release SDK control, validate high-rate telemetry,
-and release control on every exit. Its stdout protocol is exactly one flushed
-line for each completed boundary: `SDK_ACQUIRED`, `ACTION_FINISHED`, and
-`ROBOT_RELEASED`. Missing or out-of-order markers fail the action. `SIGTERM` must
-perform the same release path; a stuck sender is killed after a bounded grace
-period and remains a fault. No sender is included or enabled because the
-official public repository does not identify a byte layout as compatible with
-the deployed Deeprcs `2.0.153`. Do not set the layout identifier or install a
-sender until that compatibility and Retroid STOP preemption are physically
-verified with a hoist or equivalent independent restraint.
+The older action coordinator still expects a separately configured
+`~sdk_sender_path`, but it is now diagnostic-only and absent from the official
+launch. Do not configure it with the official expression executable: that
+would create a second owner and violate the continuous-session design.
 
 A 2026-09-19 hoisted direct-joint commissioning attempt additionally proved
 that `Sender::ControlGet(SDK)` (`0x0114`) is not a seamless handoff from the
@@ -140,7 +136,7 @@ Do not bypass it to command small offsets from a vendor-controlled standing
 pose. Direct-joint work now requires a reviewed vendor-supported zero-to-stand
 SDK transition before expression trajectories can be commissioned.
 
-The standalone official-SDK neutral-breathing commissioning runner uses a
+The official `motion_sdk_expression_runner` uses the commissioned
 two-stage feedback watchdog for that zero-to-stand path. A `0x0906` age above
 100 ms freezes trajectory time and repeatedly sends the last validated joint
 positions with zero desired velocity and torque. It does not advance the stand
@@ -152,7 +148,7 @@ bounded hold addresses measured 100-166 ms passive-tap scheduling gaps without
 turning a dead stream into an unbounded blind stand; a persistent fault can
 still make the vendor release sequence lower the robot.
 
-The commissioned animal-like neutral cycle is a deliberately slower physical
+The commissioned animal-like neutral cycle remains a deliberately slower physical
 translation of Gazebo's two-sided height/roll/pitch loop. It takes 0.75 seconds
 from exact neutral to an expanded endpoint, 1.25 seconds through the compressed
 endpoint, and 1.25 seconds back to exact neutral. Base HipY compression ranges
@@ -172,11 +168,11 @@ same no-retry MotionSDK release path. As with the high-rate reader, a transient
 sequence-lock collision retains the last fully validated state record rather
 than being misclassified as a safety fault.
 
-The hard gate is deployed on the perception computer and defaults false in both
-configuration and the bridge executable. Local verification covers a clean
-Release build, 27 unit tests, exact packet codes, exclusive sender ownership,
-graceful release, independent crash-watchdog release, and the standalone C++
-state-safety and animal-profile bounds tests. A live full-amplitude symmetric
+The legacy hard gate is deployed on the perception computer and defaults false
+in both configuration and the bridge executable. The 2026-09-20 offline gate
+covers a clean Release build, 29 Python tests, four ROS-independent C++ suites,
+exact packet codes, exclusive sender ownership, graceful release, independent
+crash-watchdog release, and launch enumeration. A live full-amplitude symmetric
 run completed 19 five-second cycles before fresh state `8` triggered the
 intended no-retry return-to-robot path. A subsequent animal-like run completed
 at least 27 3.25-second cycles and remained active at the documented handoff;
@@ -184,9 +180,39 @@ four measured telemetry gaps paused and recovered without a tracking or state
 fault. See `docs/HARDWARE_APP_CONTROL.md` for the complete dated attempt history
 and measurements.
 
-After the `SDK_ACQUIRED` marker the coordinator writes a mode-0600 ownership
-marker in `/dev/shm`. A restarted supervisor enters `RECOVERY`, and the sender
-must support `--recover` and emit `ROBOT_RELEASED` before the marker is cleared.
+Validated emotion state is copied into
+`/dev/shm/emotion_bot_lite3_emotion_state` with the state-1.1 fields plus the
+transport session/sequence and monotonic receive time. The ROS-independent
+runner is its only actuator consumer. Runner status is copied back through
+`/dev/shm/emotion_bot_lite3_expression_status` and published read-only as JSON
+schema `1.0` on `/emotion_bot/hardware/expression_status`.
+
+All nine planted profiles are compiled and tested, but the runtime allowlist is
+`neutral` by default. Set `HARDWARE_COMMISSIONED_EMOTIONS` only to categories
+with recorded physical evidence. A category switch always returns to exact
+stand for 1.5 seconds and holds it for 0.35 seconds; rapid changes replace one
+pending target. A planted front-shoulder experiment did not read visually as
+front-paw stomping and was reverted; joy retains its previously accepted
+stage-one profile. True airborne hops and lifted-foot stomps are not
+implemented. The live SDK-owned feedback currently reports zero in every
+contact channel while standing, so it cannot provide the required
+unload/contact/landing gate.
+
+The runner now also computes a **read-only torque-derived foot-load estimate**
+from the joint positions and torques in the same official SDK feedback. It uses
+the maintained Lite3 leg Jacobian and solves `J(q)^T F = tau`; it does not use
+the all-zero vendor contact array. During the exact-stand hold it collects at
+least 50 distinct samples and accepts a baseline only when every foot and the
+total load are plausible and stable. The additive `estimated_contact` object in
+`/emotion_bot/hardware/expression_status` exposes validity, baseline validity,
+support count, total and per-foot vertical load, and the per-foot baseline.
+`motion_gate_enabled` is deliberately `false`: this diagnostic cannot yet
+authorize a lift or landing. Its deterministic test reproduces a recorded
+standing sample at `23.44/24.34/31.23/35.73 N` (total `114.74 N`, versus
+`116.15 N` configured static weight) and exercises fail-closed invalid,
+singular, weak-baseline, unload, and landing cases. See
+[`TICKET_JOY_FRONT_PAW.md`](../../tickets/TICKET_JOY_FRONT_PAW.md) for the
+separate calibration and lifted-paw movement plan.
 
 ## Development-side commands
 
@@ -199,8 +225,10 @@ make -C lite3-noetic run-emotion-chat
 
 The first target checks that both robot services are active and both transmit
 flags remain false, opens a loopback-only SSH tunnel through the motion host,
-starts the ephemeral OpenAI sidecar, and runs the development-computer brain.
-Ctrl-C closes the tunnel and sidecar. Use `run-emotion-hardware-offline` for the
-deterministic backend.
+starts the ephemeral OpenAI sidecar and development-computer brain, and then
+executes the official runner on the perception computer. Ctrl-C releases SDK
+ownership before closing the tunnel and sidecar. Use
+`run-emotion-hardware-offline` for the deterministic backend. The old height
+bridge is isolated behind `run-emotion-hardware-retroid-diagnostic`.
 
 These targets are intentionally distinct from every simulation target.

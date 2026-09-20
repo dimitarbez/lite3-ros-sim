@@ -12,6 +12,7 @@ from std_msgs.msg import Bool, String
 from emotion_bot_lite3_hw.stop_transport import (
     MAX_FRAME_BYTES, StopRelayError, StopRelaySequenceGate, decode_frame, load_key,
 )
+from emotion_bot_lite3_hw.shared_memory import SharedTelemetry, encode_safety_record
 
 
 class StopRelayReceiver:
@@ -30,6 +31,10 @@ class StopRelayReceiver:
         self.last_frame = None
         self.stop_until = 0.0
         self.lock = threading.Lock()
+        shared_path = rospy.get_param(
+            "~shared_memory_path", "/dev/shm/emotion_bot_lite3_safety_state"
+        )
+        self.shared = SharedTelemetry(shared_path, create=True)
         self.stop_pub = rospy.Publisher("/emotion_bot/hardware/retroid_stop", Bool, queue_size=20, latch=True)
         self.status_pub = rospy.Publisher("/emotion_bot/hardware/retroid", String, queue_size=20, latch=True)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -43,6 +48,7 @@ class StopRelayReceiver:
             self.sock.close()
         except OSError:
             pass
+        self.shared.close()
 
     def publish(self, _event):
         now = time.monotonic()
@@ -53,6 +59,9 @@ class StopRelayReceiver:
         link_fresh = age is not None and age <= self.timeout
         observed_fresh = link_fresh and frame is not None and frame.observed_fresh
         axes_zero = observed_fresh and frame.axes_zero
+        self.shared.write(time.monotonic_ns(), encode_safety_record(
+            stop, observed_fresh, axes_zero, self.gate.sequence,
+        ))
         self.stop_pub.publish(Bool(data=stop))
         self.status_pub.publish(String(data=json.dumps({
             "stop": stop,

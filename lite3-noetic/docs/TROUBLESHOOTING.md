@@ -1,5 +1,25 @@
 # Troubleshooting
 
+## `/emotion_bot/hardware/expression_status` says `not_running`
+
+The read-only publisher cannot see a fresh runner record. Confirm the robot was
+left in basic state `1`, the official runtime was installed from the configured
+`HARDWARE_MOTION_SDK_DIR`, and terminal 1 is still attached to
+`run-emotion-hardware`. Do not start the Retroid or legacy direct-joint
+diagnostic concurrently. A normal safety or stale-link release requires a new
+operator-started session; it never reacquires automatically.
+
+If status shows `neutral` while another emotion is requested, inspect
+`HARDWARE_COMMISSIONED_EMOTIONS`. This is expected until that planted profile
+has its own recorded physical commissioning evidence. Do not widen the
+allowlist merely to clear the status mismatch.
+
+If `feedback_paused` is true, trajectory time is frozen and the last validated
+positions are being held with zero velocity/torque. Recovery requires 20 fresh
+distinct frames; 250 ms of dead feedback, STOP, state `8`, nonzero errors,
+tracking error, excessive attitude, or the configured battery floor causes
+release instead.
+
 ## Hardware service refuses to arm
 
 This is the expected result from the checked-in hardware configuration. Inspect `/emotion_bot/hardware/status`; posture requires a fresh AI link, fresh `0x0901` and reviewed high-rate telemetry, stable state `6`, zero Retroid axes, healthy joints/IMU, explicit transmission enablement, and nonzero measured axis commissioning. Dynamic actions additionally require the exact Deeprcs `2.0.153` layout, reviewed trajectories, and a recorded STOP-preemption pass. Do not bypass a false gate.

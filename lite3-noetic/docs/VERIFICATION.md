@@ -298,6 +298,272 @@ maximum pause of `90.9427 ms`. The continuous runner and ownership marker were
 still active at handoff, with the independent state-8 and dead-stream release
 paths armed.
 
+## Nine-category physical expression runtime — offline verification 2026-09-20
+
+This software-only change was verified in the wrapper working tree based on
+`a3fee6db1ed5e133db1bc83a86cead4c7d7f37a9`, with the unchanged active
+Lite3_VMC checkout at `c405287e1ac19bbbe9deedbf3493a0bb94cfab09` and
+EmotionBot checkout at `7ae69828038c2f3563fc00d17fbfb2e3927abf57`. The
+changes were uncommitted at verification time. No robot host was contacted and
+no physical command was sent.
+
+The final offline authority completed successfully:
+
+```bash
+make -C lite3-noetic verify-hardware-offline
+```
+
+It passed shell/Python static checks, a clean Release build of the hardware
+catkin workspace, all 29 Python protocol/mapping/shared-memory tests, exact
+packet checks, the loopback fail-closed acquisition/lease/graceful-release and
+crash-watchdog integration test, and official/diagnostic launch enumeration.
+The separate ROS-independent CMake suite passed all three targets:
+
+- profile/safety checks for nine unique planted profiles, finite samples,
+  neutral seams, endpoint derivatives, joint bounds and motion limits;
+- transition behavior for category changes, rapid retargeting, same-category
+  affect updates, neutral-only commissioning and stale-link release; and
+- a fake-Sender session with one acquisition/release, uninterrupted simulated
+  1 kHz ownership, exact reset timing and inspectable status output.
+
+The existing planted Gazebo end-to-end sweep also passed after the wrapper
+changes. It exercised all nine categories, rapid/repeated changes, disabled and
+watchdog stops, manual arbitration, 13 controllers, 12 joint states and the
+no-hardware boundary. Its maximum per-profile planar displacement was
+`0.0362 m`, below the `0.10 m` guard; teardown reported no controller failure
+markers. This was regression evidence only: no Lite3_VMC simulation source or
+submodule commit changed in this implementation.
+
+Two checks are deliberately not claimed. A real build of
+`motion_sdk_expression_runner` against the official aarch64 MotionSDK was not
+available because the development shell could not resolve `github.com`, no
+local SDK checkout or aarch64 cross-compiler was present, and the disconnected
+robot hosts were intentionally not contacted. The edited runner did pass a
+host syntax build against interface-compatible stub headers, but that is not a
+substitute for the required official aarch64 Release build. The longer
+two-idle-cycle Gazebo animation sweep was tried twice from clean process state;
+both attempts stopped during neutral idle because simulated time stalled. The
+normal all-category sweep above passed, so this is recorded as a Gazebo-clock
+runtime failure rather than animation evidence.
+
+The broader unchanged simulation gate was not fully green: its build, 60
+Python tests, five controller-side C++ tests and offline OpenAI boundary test
+passed, but `emotion_bot_core.test` twice observed `bounded.linear.z` above its
+`0.035` assertion (`0.047560...` and `0.037623...`). No simulator source was
+altered to mask that independent timing/bound failure.
+
+Only `neutral` remains commissioned by default. The eight new categories,
+physical scale steps, direct transitions, STOP response and chat-driven sweep
+still require a separately authorized restrained robot session. Airborne hops
+and lifted-foot stomps remain out of scope and unimplemented.
+
+### ARM deployment preflight — 2026-09-20
+
+After explicit authorization to reconnect, the same working tree was staged on
+the perception host without starting a motion owner. The retained clean
+official MotionSDK checkout was commit
+`b30a3ec09619e1dd0f3cfa6c49a50eb59670f141`; its aarch64 library SHA-256 was
+`133349ceb6efdae1987f1d7787c7658e7be9cf32467e4ae123ee0d77934f62fb`.
+The first real ARM compile found that the official `RobotCmd::joint_cmd` is a C
+array, unlike the interface stub used by the earlier syntax check. Replacing
+the non-portable `.size()` call with an array-size expression fixed the build.
+
+The clean aarch64 Release build then completed and all three standalone suites
+passed on the perception host. The installed runner was an ARM aarch64 ELF with
+SHA-256 `057babd3738f8ea240a0ccf1bbc5a96bb0999fa4e745a849ffdd2120baffcd97`
+and resolved the official aarch64 SDK library from
+`/home/ysc/Lite3_MotionSDK/lib`. The local full offline gate also passed again
+before deployment.
+
+The unprivileged core was restarted to load the new receiver and read-only
+expression-status publisher. Live preflight showed a fresh authenticated
+Retroid observer, centered axes, STOP false, errors zero, compatible SDK
+layout, no competing sender or ownership marker, and battery `71%`. The robot
+reported undocumented basic state `98`, not required sitting state `1`.
+Accordingly a preflight-only runner invocation rejected the session before
+constructing a `Sender` and printed `official expression runtime requires
+initial robot state 1; observed 98`. No robot command or motion was issued.
+
+### Restrained neutral-to-joy test at 25% — 2026-09-20
+
+After the operator returned the robot to state `1` and reconfirmed that the
+physical safety setup was ready, one continuous session was run with the
+temporary allowlist `neutral,joy` and profile scale `0.25`. Final preflight was
+state/gait/motion `1/0/0`, battery `69%`, error flags `0`, roll `0.004 deg`,
+pitch `0.312 deg`, compatible SDK layout, fresh authenticated Retroid observer,
+centered axes, STOP false, and no existing owner.
+
+`RobotStateInit`, the one-second `PreStandUp`, the 1.5-second `StandUp`, and the
+one-second canonical hold all completed. Feedback ages at their phase
+boundaries were at most `0.530 ms`. Neutral then completed at least 41 full
+profile cycles with continuous ownership and no fault. The deterministic input
+`I am thrilled and joyful!` produced emotion-state `1.1` joy with valence
+`0.7`, arousal `0.6`, sequence `1`, and turn `legacy-000001`. The runner
+transitioned to active joy and completed at least 33 joy cycles before operator
+termination; sampled status had no pending target, fault, or feedback pause.
+
+An eight-second joy window captured 762 decoded `0x0906` samples. Maximum
+measured spans by joint family were `0.0013733 rad` HipX, `0.0067139 rad` HipY,
+and `0.0080109 rad` knee. Maximum measured absolute velocity was
+`0.2363205 rad/s`. State remained `1`, errors remained zero, high-rate feedback
+remained healthy, roll stayed within `-0.015..+0.107 deg`, and pitch stayed
+within `-0.233..-0.095 deg`. The temperature fields were zero throughout, so
+they are not treated as measured motor-temperature evidence.
+
+Ctrl-C entered the normal release path. Across the full session the maximum
+feedback age/update gap was `150.120/151.024 ms`; all eight pauses recovered
+after the required fresh frames and the longest pause was `74.037 ms`. No
+robot-safety fault occurred. Post-release state was `1`, battery `66%`, errors
+`0`, STOP false, high-rate feedback inactive as expected, no runner process,
+and no official or legacy ownership marker. The command returned status 130
+because it was operator-terminated after release.
+
+This is partial joy commissioning evidence at `25%`, not approval for the
+default allowlist. Visual confirmation of four planted feet and the required
+`50%`, `75%`, and `100%` steps remain outstanding, so the checked-in default
+continues to be neutral-only.
+
+### Operator-accepted neutral-to-joy test at 100% — 2026-09-20
+
+The operator reported that the 25% joy motion was not visually distinguishable
+from breathing and explicitly authorized a second session at `100%`. Fresh
+preflight was state/gait/motion `1/0/0`, battery `65%`, errors `0`, roll
+`0.043 deg`, pitch `0.259 deg`, compatible SDK layout, fresh authenticated
+Retroid observation, centered axes, STOP false, and no owner. The runner again
+completed initialization, both vendor stand phases, and the canonical hold,
+then completed seven neutral cycles before the joy request.
+
+Joy became active under uninterrupted ownership and reached cycle 18 before
+the bounded test ended. An eight-second full-scale joy window captured 760
+decoded `0x0906` samples. Maximum measured spans were `0.0018311 rad` HipX,
+`0.0418091 rad` HipY, and `0.0580597 rad` knee; maximum absolute joint velocity
+was `0.3550339 rad/s`. State stayed `1`, errors stayed zero, high-rate feedback
+stayed healthy, roll stayed within `-0.460..+0.458 deg`, and pitch stayed within
+`-0.881..-0.017 deg`. The operator then reported that the motion looked good,
+providing visual acceptance of the full-scale joy expression.
+
+Ctrl-C again completed the normal release. Maximum feedback age/update gap was
+`150.478/145.420 ms`; all three pauses recovered and the longest was
+`78.007 ms`. No robot-safety fault occurred. Post-release state was `1`,
+battery `64%`, errors `0`, STOP false, high-rate feedback inactive as expected,
+with no runner and no ownership marker.
+
+The explicitly requested jump from `25%` to `100%` means the original `50%`
+and `75%` commissioning points were not run. The checked-in allowlist therefore
+remains neutral-only even though the full-scale joy profile was operator-
+accepted. Adding joy to the default requires either completing those two
+recorded steps or an explicit decision to waive them.
+
+### Joy readability revision and airborne-hop gate — 2026-09-20
+
+After the accepted first full-scale run, the operator requested a more obvious
+joy loop and asked to enable the Gazebo hop. The physical joy idle was revised
+to replay its existing planted crouch-rise-neutral hop proxy on every cycle,
+then rock through the full already-bounded stage-one endpoints: compression
+remains `-0.008..+0.020 rad`, roll remains `+/-0.004 rad`, pitch remains
+`+/-0.003 rad`, and HipX/yaw remain zero. Rock duration increased to `0.80 s`
+so the larger endpoints continue to satisfy the existing velocity and
+acceleration assertions. No joint bound was widened.
+
+`make -C lite3-noetic verify-hardware-offline` passed after the change,
+including all three standalone C++ suites, 29 Python tests, a clean Release
+catkin build, the packet/lease/crash-watchdog integration test, and launch
+enumeration. The real aarch64 MotionSDK build also passed all three suites; the
+installed runner SHA-256 was
+`76334b507fdd07885c3ca49b2d71d653cfddc3746fad9f7943f74899c19814e4`.
+
+A fresh full-scale `neutral,joy` session started from state/gait/motion
+`1/0/0`, battery `61%`, errors `0`, STOP false, centered Retroid axes, and no
+owner. It completed the vendor initialization/stand sequence and at least six
+revised joy cycles. Sampled status reported active joy, no pending target,
+healthy high-rate feedback, and no fault; state remained `1` with errors `0`.
+Normal Ctrl-C release completed with one telemetry pause and one recovery,
+maximum feedback age/update gap `143.725/144.128 ms`, maximum pause
+`72.9974 ms`, no safety fault, and no remaining ownership marker. Post-release
+state was `1`, battery `59%`, errors `0`, STOP false, and centered axes.
+
+The session also disproved the current contact gate under official ownership:
+all 12 decoded contact channels were exactly zero while the robot was visibly
+standing, and `all_contacts_healthy` was false. This differs from an earlier
+passive standing capture with negative vertical channels. The checked-in
+`contact_feedback_available` flag is therefore now false. The operator stated
+that STOP preemption works, but this run did not produce a new measured STOP
+latency trace. More importantly, neither the official MotionSDK nor the
+continuous runner provides a physical hop primitive, and the simulator's
+`0.55 s` metre-based body-height trajectory cannot be copied into raw joint
+angles. A true airborne hop remains disabled until a calibrated physical
+trajectory and mode-valid flight/landing sensing are implemented and tested.
+
+### Visually rejected planted front-paw experiment — 2026-09-20
+
+The operator clarified that joy should resemble an excited dog's alternating
+front-paw stomps rather than a hop. The physical idle loop was changed to
+alternate front-left and front-right shoulder emphasis with exact-neutral
+beats. At each target, the emphasized front combined compression was
+`+0.020 rad`, its same-side rear remained at `+0.014 rad`, all other legs also
+remained at or above neutral compression, and HipX/yaw/torque feed-forward
+stayed zero. This deliberately produced no foot lift.
+
+The full offline hardware gate passed. The real aarch64 build and all three C++
+suites passed; the installed runner SHA-256 was
+`135cad0d909ca13e10865bb9a5860538a9069e8087af64f8eb125f9955dc6894`.
+A fresh full-scale run began from state/gait/motion `1/0/0`, battery `57%`,
+errors `0`, STOP false, centered controls and no owner. The deterministic joy
+turn completed at least 24 loops with no sampled runner fault. State remained
+`1`, errors remained `0`, roll/pitch were `-0.047/+0.087 deg` in the sampled
+window, and high-rate feedback was healthy. Four telemetry pauses all
+recovered; maximum age/update gap was `155.202/155.775 ms`, and maximum pause
+was `77.9819 ms`. Ctrl-C released cleanly with no safety fault. Post-release
+state was `1`, battery `55%`, errors `0`, STOP false, centered controls, and no
+owner.
+
+The operator reported that nothing read as joy and that the feet were still
+fully planted, so this is a failed visual result rather than accepted
+choreography. Read-only follow-up confirmed that the vendor ROS bridge exposes
+no foot-contact topic and `/joint_states` contains empty velocity and effort
+arrays. Together with the all-zero MotionSDK contact block under SDK ownership,
+there is no mode-valid unload/landing signal. No open-loop foot-lift trajectory
+was sent. The visually rejected front-shoulder profile was reverted after the
+test, so the source and installed runner retain the previously operator-
+accepted stage-one joy choreography. The checked-in default allowlist remains
+neutral-only.
+
+### Torque-derived contact estimator — offline verification 2026-09-20
+
+The next implementation step is diagnostic only. The official runner now
+estimates each foot force from SDK joint position and torque by solving
+`J(q)^T F = tau` with the maintained physical Lite3 geometry and joint
+directions. It collects a distinct-tick exact-stand baseline, filters each
+vertical load, and reports baseline validity, support count, total load,
+per-foot load, and per-foot baseline under `estimated_contact` in expression
+status. The published `motion_gate_enabled` value is hard-coded false, and the
+estimator is not consumed by any trajectory or safety decision.
+
+The deterministic recorded standing fixture estimates front-left/front-right/
+hind-left/hind-right vertical loads of `23.44/24.34/31.23/35.73 N`, totaling
+`114.74 N`. The configured 11.84 kg robot weighs approximately `116.15 N`, so
+this one recorded sample differs by about 1.2%. The native test also verifies
+that repeated ticks cannot inflate the baseline, unload and landing require
+consecutive frames with hysteresis, and non-finite input, singular kinematics,
+or an implausibly weak baseline fail closed.
+
+`make -C lite3-noetic hardware-expression-tests` passed all four C++ suites.
+`make -C lite3-noetic verify-hardware-offline` then passed the same four suites,
+29 Python tests, a clean Release catkin build, packet/lease/crash-watchdog
+integration, and launch enumeration. This is offline evidence only: the new
+estimator was not run on the robot and no new physical command was sent.
+
+The source was then compiled against the robot's actual aarch64 MotionSDK and
+all four native suites passed on the perception computer. The runner was
+installed with SHA-256
+`4f4e9393a951d965cc1b603974fa21e996f78d395241ddbc7382ab4a2d9abc97`;
+the previously installed SHA-256
+`057babd3738f8ea240a0ccf1bbc5a96bb0999fa4e745a849ffdd2120baffcd97`
+was retained as a checksum-named backup. No runner process was started, no SDK
+ownership marker appeared, and no estimator values were collected from this
+new build. The calibration and movement requirements are tracked separately in
+[`TICKET_JOY_FRONT_PAW.md`](../../tickets/TICKET_JOY_FRONT_PAW.md).
+
 ## Cartoon-expression Gazebo sweep
 
 The current simulation-only sweep is run from the repository root with:

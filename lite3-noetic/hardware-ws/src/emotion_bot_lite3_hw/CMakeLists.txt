@@ -29,6 +29,7 @@ catkin_install_python(PROGRAMS
   scripts/action_controller.py
   scripts/direct_gate_stream.py
   scripts/emotion_receiver.py
+  scripts/expression_status_publisher.py
   scripts/hardware_mapper.py
   scripts/posture_bridge.py
   scripts/planted_joint_controller.py

@@ -61,13 +61,17 @@ make -C lite3-noetic run-emotion-hardware
 make -C lite3-noetic run-emotion-chat
 ```
 
-The hardware target checks the installed robot services and fail-closed flags,
-opens the loopback-only SSH tunnel through `192.168.2.1`, starts the ephemeral
-OpenAI sidecar, and launches the brain. The uplink revalidates emotion-state 1.1
+The hardware target checks the installed robot services, fail-closed legacy
+flags, and absence of another sender; opens the loopback-only SSH tunnel through
+`192.168.2.1`; starts the ephemeral OpenAI sidecar and brain; then starts the
+sole continuous official MotionSDK expression runner. The uplink revalidates emotion-state 1.1
 and sends transport-schema 1.0 NDJSON at 5 Hz with a random session ID and
 increasing sequence. The receiver binds only to loopback, rejects frames over 2
 KiB and replays, and measures freshness with the perception host's monotonic
-clock. Ctrl-C removes the tunnel and sidecar.
+clock. Each accepted envelope is also written to a versioned sequence-locked
+record containing category, affect, turn, session/sequence, and receive time.
+Ctrl-C terminates the runner through its normal MotionSDK release path before
+removing the brain, tunnel, and sidecar.
 
 Robot-side nodes live in the separate `hardware-ws` catkin workspace. The
 perception telemetry service and ROS-less motion-host STOP observer receive only
@@ -77,32 +81,31 @@ supervisor is the only arming authority and has mutually exclusive `DISARMED`,
 `POSTURE_ARMED`, `ACTION_PENDING`, `SDK_TAKEOVER`, `ACTION_ACTIVE`, `RECOVERY`,
 and `FAULT` states. See `hardware-ws/README.md` before any deployment.
 
-The repository defaults deliberately cannot move hardware: transmission and dynamic actions are false, commissioned limits/rates and posture amplitudes are zero, the exact `0x0906` layout is unset, STOP preemption is unverified, and trajectories are empty. Do not turn those fields into guessed values.
+The legacy posture/action graph remains absent from the official launch and its
+transmit flags remain false. It is available only through
+`hardware_diagnostic.launch` and `run-emotion-hardware-retroid-diagnostic`.
+The official runner has an independent exclusive lease and marker, requires
+initial state `1`, and defaults to the commissioned allowlist `neutral`.
 
-### Default neutral hardware sequence
+### Official continuous hardware sequence
 
-The first measured height motion on 2026-09-19 used a direct diagnostic that
-reproduced the full Lite3 app's captured protocol. The maintained
-`run-emotion-hardware` target now starts the same neutral-only host bridge by
-default. Its exact session order is four heartbeats at
-2 Hz, Move, a 2.0-second wait, Pose, and a 1.5-second wait. Each 50 Hz height
-sample was then preceded immediately by command `0x21010135` with the captured
-Retroid companion value `32768`. Shutdown sent five yaw-`0`/height-`0` pairs at
-20 ms spacing.
+The runtime accepts control only from state `1`, executes the proven vendor
+zero-to-stand sequence once, and keeps one 1 kHz SDK owner. All profiles keep
+HipX, yaw, planar motion, and feed-forward torque zero. Neutral is the unchanged
+3.25-second commissioned animal-breath loop. The other categories translate the
+Gazebo keyframe order into `-0.008..+0.020 rad` base compression,
+`+/-0.004 rad` roll bias, and `+/-0.003 rad` pitch bias; joy/surprise and anger
+use planted pulses instead of hop or lifted-foot stomp.
 
-The bridge uses source port `43897`, target `192.168.2.1:43893`, a height
-envelope of `0` to `-10000`, `4000 units/s` maximum rate, a 4-second entrance,
-and a 10-second period. Before transmission it requires `DISARMED`,
-stable basic state `6`, zero errors, fresh telemetry/joints/IMU/AI link, fresh
-centered Retroid input, STOP false, and 12 finite joint values. The operator had
-the Retroid STOP ready in a clear, level area. Dynamic actions, locomotion,
-direct joints, and torque output remained out of scope.
-
-The operator authorized a 25% minimum battery; that is the explicit runtime
-floor and output pauses below it. It does not replace the Pro manual's 75% start
-recommendation. The checked-in robot-side transmission flags remain false: the
-launcher-owned bridge is exclusive, neutral-only, freshness-gated, and guarded
-by a 250 ms relay watchdog plus the five-pair exact-zero fallback.
+Every category change performs a 1.5-second quintic return to canonical stand
+and a 0.35-second exact hold. Rapid requests replace one pending target without
+restarting that reset; same-category affect updates do not restart a loop. At a
+0.75-second emotion-link timeout the same reset begins, and the runner releases
+after it completes if the link remains stale. STOP, state `8`, nonzero errors,
+attitude outside `+/-10 degrees`, battery below the configured 25% floor,
+invalid/dead feedback, tracking error, signal, or process failure enters the
+existing immediate hold/release path. Read-only JSON status schema `1.0` is
+published on `/emotion_bot/hardware/expression_status`.
 
 ## Conversation and turn ordering
 

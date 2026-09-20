@@ -31,7 +31,10 @@ from emotion_bot_lite3_hw.protocol import (
     filter_datagram, is_sdk_joint_command, parse_command, parse_ethernet_udp,
     parse_joint_vector, parse_robot_state_0901, parse_simple_stop,
 )
-from emotion_bot_lite3_hw.shared_memory import SharedTelemetry
+from emotion_bot_lite3_hw.shared_memory import (
+    SharedTelemetry, decode_emotion_record, decode_safety_record,
+    encode_emotion_record, encode_safety_record,
+)
 from emotion_bot_lite3_hw.supervisor import Gates, State, Supervisor
 from emotion_bot_lite3_hw.stop_transport import (
     StopRelayError, StopRelayFrame, StopRelaySequenceGate, decode_frame as decode_stop_frame,
@@ -207,6 +210,31 @@ class SharedMemoryTests(unittest.TestCase):
             self.assertEqual(payload, b"packet")
             reader.close()
             writer.close()
+
+    def test_emotion_record_preserves_contract_and_transport_identity(self):
+        envelope = {
+            "schema_version": "1.0", "session_id": "session-a", "sequence": 9,
+            "payload": {
+                "schema_version": "1.1", "sequence": 42, "emotion": "curiosity",
+                "valence": 0.25, "arousal": 0.75, "turn_id": "turn-4",
+            },
+        }
+        decoded = decode_emotion_record(encode_emotion_record(envelope))
+        self.assertEqual(decoded["record_version"], "1.1")
+        self.assertEqual(decoded["transport_sequence"], 9)
+        self.assertEqual(decoded["state_sequence"], 42)
+        self.assertEqual(decoded["emotion"], "curiosity")
+        self.assertEqual(decoded["session_id"], "session-a")
+        self.assertEqual(decoded["turn_id"], "turn-4")
+        self.assertAlmostEqual(decoded["valence"], 0.25)
+        self.assertAlmostEqual(decoded["arousal"], 0.75)
+
+    def test_safety_record_preserves_stop_and_relay_state(self):
+        decoded = decode_safety_record(encode_safety_record(True, True, False, 17))
+        self.assertEqual(decoded, {
+            "record_version": "1.0", "stop": True,
+            "observed_fresh": True, "axes_zero": False, "sequence": 17,
+        })
 
 
 class MappingAndSupervisorTests(unittest.TestCase):

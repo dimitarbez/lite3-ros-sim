@@ -41,9 +41,11 @@ safety:
     joint_offset: 44
     imu_offset: 8
     contact_offset: 240
-    # Four standing vertical channels were stable between -3.51 and -4.60
-    # over 4 s; all were exactly zero while sitting. Negative is planted.
-    contact_feedback_available: true
+    # A prior passive standing capture showed negative vertical values, but a
+    # 2026-09-20 capture during official SDK ownership reported all 12 channels
+    # as exact zero while standing.  Until that mode-dependent discrepancy is
+    # resolved, contact cannot distinguish stance, flight, or landing.
+    contact_feedback_available: false
     contact_z_sign: -1
     contact_minimum_z: 1.0
   stop_preemption_verified: false

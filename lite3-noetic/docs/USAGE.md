@@ -208,6 +208,49 @@ Stop the development container only when finished with all work:
 make -C lite3-noetic stop
 ```
 
+## Separately authorized physical-expression session
+
+These commands are not part of the Gazebo workflow. Use them only in a task
+that explicitly authorizes current physical operation and after completing the
+manufacturer restraint, distance, STOP, state, network, and battery checks in
+[the hardware record](HARDWARE_APP_CONTROL.md). The robot must begin sitting in
+basic state `1`.
+
+After the one-time install, use two attached terminals:
+
+```bash
+# Terminal 1: official continuous MotionSDK owner and brain
+make -C lite3-noetic run-emotion-hardware
+
+# Terminal 2: existing chat window
+make -C lite3-noetic run-emotion-chat
+```
+
+Inspect the runner without commanding it from ROS:
+
+```bash
+ssh -J ysc@192.168.2.1 ysc@192.168.1.103 \
+  'source /opt/ros/noetic/setup.bash; source ~/emotion_bot_lite3_hw_ws/devel/setup.bash; rostopic echo /emotion_bot/hardware/expression_status'
+```
+
+The default allowlist is only `neutral`. During separately authorized staged
+commissioning, add only already approved categories and choose the requested
+scale explicitly, for example
+`HARDWARE_COMMISSIONED_EMOTIONS=neutral,affection HARDWARE_EXPRESSION_SCALE=0.25`.
+Do not enable a category merely because its offline tests pass.
+
+Press `Ctrl+C` in terminal 1 to enter the normal SDK release path. A stale chat
+link first returns to neutral for 1.5 seconds and holds for 0.35 seconds, then
+releases; a safety fault releases immediately. Recovery always requires a new
+operator-started session. The Retroid-compatible height path is diagnostic-only:
+
+```bash
+make -C lite3-noetic run-emotion-hardware-retroid-diagnostic
+```
+
+That target refuses to start while an official or legacy direct-joint ownership
+marker exists.
+
 ## Automated checks
 
 Run only the complete headless Gazebo integration test:
@@ -221,6 +264,7 @@ Run the full offline verification gate:
 
 ```bash
 make -C lite3-noetic verify-emotion
+make -C lite3-noetic verify-hardware-offline
 ```
 
 The verification suite does not use the API key, network, microphone, GUI, physical robot, or paid API calls.

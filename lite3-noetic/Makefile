@@ -8,7 +8,7 @@ CONTAINER_NAME ?= lite3-noetic-dev
 WORKSPACE_DIR := $(ROOT_DIR)ws/Lite3_VMC
 HARDWARE_WORKSPACE_DIR := $(ROOT_DIR)hardware-ws
 
-.PHONY: help build start stop restart bootstrap shell status run-gazebo run-spawn run-sim run-keyboard topics joint-states rqt-graph run-emotion-core run-emotion-sim run-emotion-sim-locomotion run-emotion-sim-openai run-emotion-sim-headless start-openai-bridge stop-openai-bridge run-emotion-keyboard run-emotion-chat setup-emotion-hardware run-emotion-hardware run-emotion-hardware-offline run-emotion-hardware-brain run-emotion-hardware-brain-openai run-emotion-hardware-tunnel hardware-static-checks hardware-clean-build hardware-unit-tests hardware-bridge-integration-test verify-hardware-offline emotion-demo emotion-animation-review emotion-static-checks emotion-clean-build emotion-unit-tests emotion-openai-bridge-test emotion-openai-live-smoke emotion-ros-tests emotion-gazebo-test emotion-animation-gazebo-test verify-emotion
+.PHONY: help build start stop restart bootstrap shell status run-gazebo run-spawn run-sim run-keyboard topics joint-states rqt-graph run-emotion-core run-emotion-sim run-emotion-sim-locomotion run-emotion-sim-openai run-emotion-sim-headless start-openai-bridge stop-openai-bridge run-emotion-keyboard run-emotion-chat setup-emotion-hardware run-emotion-hardware run-emotion-hardware-offline run-emotion-hardware-retroid-diagnostic run-emotion-hardware-brain run-emotion-hardware-brain-openai run-emotion-hardware-tunnel hardware-static-checks hardware-expression-tests hardware-clean-build hardware-unit-tests hardware-bridge-integration-test verify-hardware-offline emotion-demo emotion-animation-review emotion-static-checks emotion-clean-build emotion-unit-tests emotion-openai-bridge-test emotion-openai-live-smoke emotion-ros-tests emotion-gazebo-test emotion-animation-gazebo-test verify-emotion
 
 EMOTION_MOTION ?= false
 CHAT_BACKEND ?= deterministic
@@ -19,7 +19,9 @@ OPENAI_ENV_FILE ?= $(WORKSPACE_DIR)/.env
 OPENAI_TEST_PORT ?= 8766
 HARDWARE_TUNNEL_PORT ?= 8767
 HARDWARE_MINIMUM_BATTERY ?= 25
-HARDWARE_NEUTRAL_BREATHING ?= true
+HARDWARE_COMMISSIONED_EMOTIONS ?= neutral
+HARDWARE_EXPRESSION_SCALE ?= 1.0
+HARDWARE_MOTION_SDK_DIR ?= /home/$(ROBOT_USER)/Lite3_MotionSDK
 ROBOT_USER ?= ysc
 ROBOT_MOTION_SSH ?= ysc@192.168.2.1
 ROBOT_PERCEPTION_SSH ?= ysc@192.168.1.103
@@ -48,12 +50,14 @@ help:
 > @echo "  make run-emotion-keyboard      Run keyboard through manual/emotion arbitration"
 > @echo "  make run-emotion-chat          Open the interactive ROS chat client"
 > @echo "  make setup-emotion-hardware    One-time fail-closed install on both robot computers"
-> @echo "  make run-emotion-hardware      Launch OpenAI hardware brain with neutral breathing by default"
-> @echo "  make run-emotion-hardware-offline  Launch deterministic hardware brain with neutral breathing"
+> @echo "  make run-emotion-hardware      Launch OpenAI brain with the continuous official MotionSDK expression runtime"
+> @echo "  make run-emotion-hardware-offline  Launch deterministic brain with the official expression runtime"
+> @echo "  make run-emotion-hardware-retroid-diagnostic  Launch the legacy neutral height bridge explicitly"
 > @echo "  make run-emotion-hardware-tunnel ROBOT_PERCEPTION_SSH=user@host  Open the explicit loopback SSH tunnel"
 > @echo "  make run-emotion-hardware-brain  Launch chat, emotion adapter, and uplink only (no actuator nodes)"
 > @echo "  make run-emotion-hardware-brain-openai  Launch hardware brain with ephemeral OpenAI sidecar"
 > @echo "  make hardware-unit-tests       Run offline split-host protocol/safety tests"
+> @echo "  make hardware-expression-tests Build/test all ROS-independent planted profiles"
 > @echo "  make hardware-bridge-integration-test  Verify direct SDK lease/release/watchdog on loopback"
 > @echo "  make verify-hardware-offline   Build and test hardware package without interfaces/capabilities"
 > @echo "  make emotion-demo [EMOTION_MOTION=true]  Run deterministic demo; optionally move"
@@ -144,13 +148,16 @@ run-emotion-chat:
 > docker exec -it "$(CONTAINER_NAME)" bash -lc 'source /opt/ros/noetic/setup.bash && source /workspaces/lite3-noetic/ws/Lite3_VMC/devel/setup.bash && rosrun emotion_bot_ros emotion_chat.py'
 
 setup-emotion-hardware:
-> ROBOT_USER="$(ROBOT_USER)" ROBOT_MOTION_SSH="$(ROBOT_MOTION_SSH)" ROBOT_PERCEPTION_SSH="$(ROBOT_PERCEPTION_SSH)" "$(ROOT_DIR)scripts/setup-emotion-hardware.sh"
+> ROBOT_USER="$(ROBOT_USER)" ROBOT_MOTION_SSH="$(ROBOT_MOTION_SSH)" ROBOT_PERCEPTION_SSH="$(ROBOT_PERCEPTION_SSH)" HARDWARE_MOTION_SDK_DIR="$(HARDWARE_MOTION_SDK_DIR)" "$(ROOT_DIR)scripts/setup-emotion-hardware.sh"
 
 run-emotion-hardware: start-openai-bridge
-> @trap 'docker stop "$(OPENAI_BRIDGE_CONTAINER)" >/dev/null 2>&1 || true' EXIT INT TERM; ROBOT_USER="$(ROBOT_USER)" ROBOT_MOTION_SSH="$(ROBOT_MOTION_SSH)" ROBOT_PERCEPTION_SSH="$(ROBOT_PERCEPTION_SSH)" HARDWARE_TUNNEL_PORT="$(HARDWARE_TUNNEL_PORT)" HARDWARE_MINIMUM_BATTERY="$(HARDWARE_MINIMUM_BATTERY)" HARDWARE_NEUTRAL_BREATHING="$(HARDWARE_NEUTRAL_BREATHING)" LITE3_CONTAINER_NAME="$(CONTAINER_NAME)" CHAT_BACKEND=openai CHAT_MODEL="$(CHAT_MODEL)" "$(ROOT_DIR)scripts/run-emotion-hardware.sh"
+> @trap 'docker stop "$(OPENAI_BRIDGE_CONTAINER)" >/dev/null 2>&1 || true' EXIT INT TERM; ROBOT_USER="$(ROBOT_USER)" ROBOT_MOTION_SSH="$(ROBOT_MOTION_SSH)" ROBOT_PERCEPTION_SSH="$(ROBOT_PERCEPTION_SSH)" HARDWARE_TUNNEL_PORT="$(HARDWARE_TUNNEL_PORT)" HARDWARE_MINIMUM_BATTERY="$(HARDWARE_MINIMUM_BATTERY)" HARDWARE_COMMISSIONED_EMOTIONS="$(HARDWARE_COMMISSIONED_EMOTIONS)" HARDWARE_EXPRESSION_SCALE="$(HARDWARE_EXPRESSION_SCALE)" LITE3_CONTAINER_NAME="$(CONTAINER_NAME)" CHAT_BACKEND=openai CHAT_MODEL="$(CHAT_MODEL)" "$(ROOT_DIR)scripts/run-emotion-hardware.sh"
 
 run-emotion-hardware-offline:
-> ROBOT_USER="$(ROBOT_USER)" ROBOT_MOTION_SSH="$(ROBOT_MOTION_SSH)" ROBOT_PERCEPTION_SSH="$(ROBOT_PERCEPTION_SSH)" HARDWARE_TUNNEL_PORT="$(HARDWARE_TUNNEL_PORT)" HARDWARE_MINIMUM_BATTERY="$(HARDWARE_MINIMUM_BATTERY)" HARDWARE_NEUTRAL_BREATHING="$(HARDWARE_NEUTRAL_BREATHING)" LITE3_CONTAINER_NAME="$(CONTAINER_NAME)" CHAT_BACKEND=deterministic CHAT_MODEL="$(CHAT_MODEL)" "$(ROOT_DIR)scripts/run-emotion-hardware.sh"
+> ROBOT_USER="$(ROBOT_USER)" ROBOT_MOTION_SSH="$(ROBOT_MOTION_SSH)" ROBOT_PERCEPTION_SSH="$(ROBOT_PERCEPTION_SSH)" HARDWARE_TUNNEL_PORT="$(HARDWARE_TUNNEL_PORT)" HARDWARE_MINIMUM_BATTERY="$(HARDWARE_MINIMUM_BATTERY)" HARDWARE_COMMISSIONED_EMOTIONS="$(HARDWARE_COMMISSIONED_EMOTIONS)" HARDWARE_EXPRESSION_SCALE="$(HARDWARE_EXPRESSION_SCALE)" LITE3_CONTAINER_NAME="$(CONTAINER_NAME)" CHAT_BACKEND=deterministic CHAT_MODEL="$(CHAT_MODEL)" "$(ROOT_DIR)scripts/run-emotion-hardware.sh"
+
+run-emotion-hardware-retroid-diagnostic:
+> ROBOT_USER="$(ROBOT_USER)" ROBOT_MOTION_SSH="$(ROBOT_MOTION_SSH)" ROBOT_PERCEPTION_SSH="$(ROBOT_PERCEPTION_SSH)" HARDWARE_MINIMUM_BATTERY="$(HARDWARE_MINIMUM_BATTERY)" "$(ROOT_DIR)scripts/run-retroid-diagnostic-hardware.sh"
 
 run-emotion-hardware-tunnel:
 > ssh -N -J "$(ROBOT_MOTION_SSH)" -o ExitOnForwardFailure=yes -o ClearAllForwardings=yes -L 127.0.0.1:$(HARDWARE_TUNNEL_PORT):127.0.0.1:$(HARDWARE_TUNNEL_PORT) "$(ROBOT_PERCEPTION_SSH)"
@@ -165,9 +172,12 @@ hardware-unit-tests:
 > PYTHONPATH="$(ROOT_DIR)hardware-ws/src/emotion_bot_lite3_hw/src" python3 -m unittest discover -s "$(ROOT_DIR)hardware-ws/src/emotion_bot_lite3_hw/test" -v
 
 hardware-static-checks:
-> bash -n "$(ROOT_DIR)scripts/setup-emotion-hardware.sh" "$(ROOT_DIR)scripts/run-emotion-hardware.sh" "$(ROOT_DIR)hardware-ws/host-install/perception/"*.sh "$(ROOT_DIR)hardware-ws/host-install/motion/"*.sh
+> bash -n "$(ROOT_DIR)scripts/setup-emotion-hardware.sh" "$(ROOT_DIR)scripts/run-emotion-hardware.sh" "$(ROOT_DIR)scripts/run-retroid-diagnostic-hardware.sh" "$(ROOT_DIR)hardware-ws/host-install/perception/"*.sh "$(ROOT_DIR)hardware-ws/host-install/motion/"*.sh
 > python3 -m py_compile "$(ROOT_DIR)scripts/run-neutral-breathing-hardware.py"
 > docker exec "$(CONTAINER_NAME)" bash -lc 'PYTHONPYCACHEPREFIX=/tmp/emotion_bot_hw_pycache python3 -m py_compile /workspaces/lite3-noetic/hardware-ws/src/emotion_bot_lite3_hw/scripts/*.py /workspaces/lite3-noetic/hardware-ws/src/emotion_bot_lite3_hw/src/emotion_bot_lite3_hw/*.py /workspaces/lite3-noetic/hardware-ws/motion-host/*.py'
+
+hardware-expression-tests:
+> docker exec "$(CONTAINER_NAME)" bash -lc 'cmake -S /workspaces/lite3-noetic/hardware-ws/tools -B /tmp/emotion-bot-motion-tools -DBUILD_EXPRESSION_RUNTIME=OFF -DCMAKE_BUILD_TYPE=Release && cmake --build /tmp/emotion-bot-motion-tools -j4 && cd /tmp/emotion-bot-motion-tools && ctest --output-on-failure'
 
 hardware-clean-build:
 > docker exec "$(CONTAINER_NAME)" bash -lc 'cd /workspaces/lite3-noetic/hardware-ws && source /opt/ros/noetic/setup.bash && catkin_make clean && catkin_make -j4 -DCMAKE_BUILD_TYPE=Release'
@@ -175,7 +185,7 @@ hardware-clean-build:
 hardware-bridge-integration-test:
 > docker exec "$(CONTAINER_NAME)" bash -lc 'source /opt/ros/noetic/setup.bash && source /workspaces/lite3-noetic/hardware-ws/devel/setup.bash && /workspaces/lite3-noetic/hardware-ws/devel/lib/emotion_bot_lite3_hw/test_motion_sdk_protocol && python3 /workspaces/lite3-noetic/hardware-ws/src/emotion_bot_lite3_hw/test/test_direct_bridge_integration.py'
 
-verify-hardware-offline: hardware-static-checks hardware-clean-build hardware-unit-tests hardware-bridge-integration-test
+verify-hardware-offline: hardware-static-checks hardware-expression-tests hardware-clean-build hardware-unit-tests hardware-bridge-integration-test
 > docker exec "$(CONTAINER_NAME)" bash -lc 'source /opt/ros/noetic/setup.bash && source /workspaces/lite3-noetic/hardware-ws/devel/setup.bash && roslaunch emotion_bot_lite3_hw hardware.launch --nodes >/dev/null'
 
 emotion-demo:

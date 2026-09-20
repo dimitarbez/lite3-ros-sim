@@ -6,4 +6,6 @@
   <include file="$(find emotion_bot_lite3_hw)/launch/hardware_telemetry.launch">
     <arg name="config" value="$(arg config)"/>
   </include>
+  <!-- Legacy posture/action senders are excluded here. Use the explicitly
+       named hardware_diagnostic.launch for that fail-closed graph. -->
 </launch>

@@ -40,6 +40,7 @@ Do not bake a remembered submodule SHA into new guidance. Read the current wrapp
 - EmotionBot tracks valence in `[-1, 1]`, arousal in `[0, 1]`, and one of nine discrete emotions. `EmotionEngine` is headless and deterministic by default; the legacy `main.py` CLI still owns plotting and optional direct response generation.
 - Do not install EmotionBot's full pinned dependency set into the ROS Noetic image. The ROS adapter imports the compatible headless core; live OpenAI replies run in the separate Python 3.12 sidecar.
 - Normal chat expression profiles are planted: x/y/yaw stay zero. Joy/surprise hops and anger stomps are bounded simulator-controller actions, not hardware commands or external Gazebo wrenches.
+- The official physical-expression path is separately named and requires initial robot state `1`. It owns MotionSDK continuously for one operator-started chat session, stands once through the vendor sequence, and implements all nine categories as planted HipY/knee/roll/pitch choreography. Only neutral is commissioned by default; true hops and lifted-foot stomps remain disabled stage-two work.
 
 ## Implemented integration boundary
 
@@ -56,6 +57,8 @@ Keep domain logic in `emotion-bot`, ROS contracts/orchestration in `emotion_bot_
 The current state/conversation/action contracts use inspectable JSON on `std_msgs/String`; motion intentions use `geometry_msgs/Twist`, and controller transport uses `sensor_msgs/Joy`. Preserve schema versions, turn correlation, generation ordering, message types, and the `/emotion_bot/...` namespace unless a coordinated migration is requested.
 
 No emotional state may publish motor, joint-effort, UDP, or unbounded velocity commands directly. Anger, surprise, and other actions pass through the same limits, watchdogs, cancellation, and stop behavior as every other state.
+
+On hardware, validated state is copied to a sequence-locked shared record; only `motion_sdk_expression_runner` reads it and sends joints. Every category change returns over 1.5 seconds to exact canonical stand, holds 0.35 seconds, then starts the newest pending category. Link staleness performs that reset and releases control; safety faults bypass it and release immediately. `/emotion_bot/hardware/expression_status` is read-only evidence from the runner. The Retroid height bridge and legacy posture/action nodes are diagnostic-only and must never run concurrently with the official owner.
 
 ## Development workflow
 
@@ -125,6 +128,8 @@ For the integrated offline gate:
 ```bash
 make -C lite3-noetic verify-emotion
 ```
+
+For physical-expression software changes, also run `make -C lite3-noetic verify-hardware-offline`. This gate is offline and is not evidence of physical commissioning.
 
 For catkin code, require a clean Release `catkin_make` in the container. For EmotionBot logic, use `requirements-dev.txt` or the wrapper's `emotion-unit-tests`; do not make pytest a production runtime dependency.
 

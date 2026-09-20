@@ -92,18 +92,18 @@ core and narrowly privileged passive-observer services without modifying vendor
 software. Thereafter, terminal one uses
 `make -C lite3-noetic run-emotion-hardware` and terminal two uses
 `make -C lite3-noetic run-emotion-chat`. The first command owns the SSH tunnel,
-OpenAI sidecar, development-computer brain, and default neutral-height bridge,
-and cleans them up on Ctrl-C. Set `HARDWARE_NEUTRAL_BREATHING=false` only for a
-brain-only diagnostic.
+OpenAI sidecar, development-computer brain, and sole continuous official
+MotionSDK expression runner, and cleans them up on Ctrl-C. The robot must start
+in state `1`; the runner performs `RobotStateInit`, `PreStandUp`, `StandUp`, and
+one neutral hold, then retains its 1 kHz lease for the chat session.
 Neither target is called by a simulation target.
 
-The robot-side package and its commissioning boundary are documented in [`hardware-ws/README.md`](hardware-ws/README.md). It is a separate catkin workspace and must not be copied into or used to edit vendor `lite_cog`/`qnx2ros`. The public MotionSDK does not establish a Deeprcs `2.0.153` byte-layout match, so direct-joint actions remain hard-disabled until a reviewed layout, independent STOP-preemption result, and measured trajectories exist.
+The robot-side package and its commissioning boundary are documented in [`hardware-ws/README.md`](hardware-ws/README.md). It is a separate catkin workspace and must not be copied into or used to edit vendor `lite_cog`/`qnx2ros`. The deployed Deeprcs `2.0.153` layout and planted neutral runner were reviewed and physically proven in the dated record. Only neutral remains in the default commissioned allowlist; the other eight planted profiles require the documented one-at-a-time commissioning, and true airborne/lifted-foot actions remain disabled.
 
 A 2026-09-19 bounded direct diagnostic produced the first measured height
-response by matching the Retroid app's Move-to-Pose handshake and paired axis
-framing. The maintained launcher now runs that neutral-only host bridge by
-default while the persistent robot-side graph remains fail-closed. See the
-hardware workspace README and
+response through the Retroid-compatible path. That bridge is now available only
+as `run-emotion-hardware-retroid-diagnostic`; it cannot share ownership with the
+official runtime. See the hardware workspace README and
 [`docs/HARDWARE_APP_CONTROL.md`](docs/HARDWARE_APP_CONTROL.md) for the exact
 sequence, measurements, shutdown boundary, and battery-policy caveat.
 
