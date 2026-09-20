@@ -86,8 +86,10 @@ make -C lite3-noetic verify-hardware-offline
 
 ## Split-host hardware development
 
-With the robot sitting and connected, run the one-time fail-closed installer with
-`make -C lite3-noetic setup-emotion-hardware`. It installs separate unprivileged
+With the robot sitting and connected, run the fail-closed installer with
+`make -C lite3-noetic setup-emotion-hardware`. Run it again after changing the
+hardware runner or robot-side package: `run-emotion-hardware` uses the installed
+aarch64 binary and does not deploy local edits. The installer creates separate unprivileged
 core and narrowly privileged passive-observer services without modifying vendor
 software. Thereafter, terminal one uses
 `make -C lite3-noetic run-emotion-hardware` and terminal two uses
@@ -98,7 +100,40 @@ in state `1`; the runner performs `RobotStateInit`, `PreStandUp`, `StandUp`, and
 one neutral hold, then retains its 1 kHz lease for the chat session.
 Neither target is called by a simulation target.
 
-The robot-side package and its commissioning boundary are documented in [`hardware-ws/README.md`](hardware-ws/README.md). It is a separate catkin workspace and must not be copied into or used to edit vendor `lite_cog`/`qnx2ros`. The deployed Deeprcs `2.0.153` layout and planted neutral runner were reviewed and physically proven in the dated record. Only neutral remains in the default commissioned allowlist; the other eight planted profiles require the documented one-at-a-time commissioning, and true airborne/lifted-foot actions remain disabled.
+For the current persistent Joy recovery check, use this exact terminal-one command
+before opening `run-emotion-chat` in terminal two:
+
+```bash
+HARDWARE_COMMISSIONED_EMOTIONS=neutral,joy \
+HARDWARE_MINIMUM_BATTERY=25 \
+HARDWARE_EXPRESSION_SCALE=1.0 \
+make -C lite3-noetic run-emotion-hardware
+```
+
+Joy then keeps repeating its accepted alternating-paw cycle while Joy remains
+the current EmotionEngine state. A missed unload with a confirmed landing and
+four restored supports performs the canonical Neutral reset and resumes Joy
+without releasing the SDK; hard safety failures still release. The complete
+deployment, validation, monitoring, and shutdown commands are in
+the [physical-expression usage section](docs/USAGE.md#separately-authorized-physical-expression-session)
+and [hardware runbook](hardware-ws/README.md#copy-paste-joy-recovery-validation).
+
+For a session containing every currently accepted physical profile, use:
+
+```bash
+HARDWARE_COMMISSIONED_EMOTIONS=neutral,joy,sadness,fear,anger \
+HARDWARE_MINIMUM_BATTERY=25 \
+HARDWARE_EXPRESSION_SCALE=1.0 \
+make -C lite3-noetic run-emotion-hardware
+```
+
+The chat commands for all nine EmotionEngine categories are `event:neutral`,
+`event:joy`, `event:sadness`, `event:fear`, `event:anger`, `event:affection`,
+`event:curiosity`, `event:disgust`, and `event:surprise`. The last four retain
+their requested emotional state but intentionally use Neutral breathing until
+their own physical reactions are implemented and accepted.
+
+The robot-side package and its commissioning boundary are documented in [`hardware-ws/README.md`](hardware-ws/README.md). It is a separate catkin workspace and must not be copied into or used to edit vendor `lite_cog`/`qnx2ros`. The deployed Deeprcs `2.0.153` layout and physical runner were reviewed and physically proven in the dated record. Only Neutral remains in the checked-in default allowlist. Joy, Sadness, Fear, and Anger may be selected explicitly as the accepted set; Affection, Curiosity, Disgust, and Surprise remain Neutral fallbacks. Airborne actions and any unaccepted lifted-foot choreography remain disabled.
 
 A 2026-09-19 bounded direct diagnostic produced the first measured height
 response through the Retroid-compatible path. That bridge is now available only

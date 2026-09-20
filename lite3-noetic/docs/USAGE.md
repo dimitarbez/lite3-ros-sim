@@ -216,15 +216,95 @@ manufacturer restraint, distance, STOP, state, network, and battery checks in
 [the hardware record](HARDWARE_APP_CONTROL.md). The robot must begin sitting in
 basic state `1`.
 
-After the one-time install, use two attached terminals:
+The run target does not deploy local source edits. On the first installation,
+and again after any runner or hardware-package change, deploy while the robot is
+sitting:
 
 ```bash
-# Terminal 1: official continuous MotionSDK owner and brain
+cd /home/dimitarbez/Dev/ROS
+make -C lite3-noetic setup-emotion-hardware
+```
+
+For the persistent Joy recovery validation, stop any old chat client first
+and use two attached terminals:
+
+```bash
+# Terminal 1: restrict this validation to Neutral and Joy
+cd /home/dimitarbez/Dev/ROS
+HARDWARE_COMMISSIONED_EMOTIONS=neutral,joy \
+HARDWARE_MINIMUM_BATTERY=25 \
+HARDWARE_EXPRESSION_SCALE=1.0 \
 make -C lite3-noetic run-emotion-hardware
 
 # Terminal 2: existing chat window
+cd /home/dimitarbez/Dev/ROS
 make -C lite3-noetic run-emotion-chat
 ```
+
+Send one Joy prompt and observe at least two complete alternating-paw cycles.
+With no further input, Joy must remain the requested and active profile and keep
+cycling; transport heartbeats only preserve link freshness and do not restart
+or stop the profile. Then send `event:neutral` and verify the current paw lowers,
+the 1.5-second canonical return and 0.35-second hold complete, and Neutral
+breathing continues under the same owner. If an unload gate is missed but the
+paw lands and all four supports are restored, the runner must perform the same
+canonical reset and resume Joy without releasing. End the chat with `:quit`;
+once status is Neutral and no paw phase is active, press `Ctrl+C` in terminal 1
+and wait for the release report.
+
+For the focused persistent Anger recovery check, use the same preflight and chat
+terminal but start terminal 1 with:
+
+```bash
+cd /home/dimitarbez/Dev/ROS
+HARDWARE_COMMISSIONED_EMOTIONS=neutral,anger \
+HARDWARE_MINIMUM_BATTERY=25 \
+HARDWARE_EXPRESSION_SCALE=1.0 \
+make -C lite3-noetic run-emotion-hardware
+```
+
+Enter `event:anger` once and observe at least two reactions. Anger must remain
+active and repeat without another chat turn. A missed unload may continue only
+after confirmed target landing and four restored supports; expect
+`ANGER_CONTACT_MISS_RECOVERED`, the 1.5-second canonical return, the 0.35-second
+exact-Neutral hold, and resumed Anger under the same owner. Finish with
+`event:neutral`, wait for Neutral breathing, exit chat with `:quit`, and then
+stop terminal 1 with `Ctrl+C`.
+
+Only after that bounded check passes, start a later authorized session with all
+previously accepted profiles:
+
+```bash
+cd /home/dimitarbez/Dev/ROS
+HARDWARE_COMMISSIONED_EMOTIONS=neutral,joy,sadness,fear,anger \
+HARDWARE_MINIMUM_BATTERY=25 \
+HARDWARE_EXPRESSION_SCALE=1.0 \
+make -C lite3-noetic run-emotion-hardware
+```
+
+This is the complete currently accepted physical allowlist. In the chat
+terminal, trigger each EmotionEngine category with the following commands, one
+at a time:
+
+```text
+event:neutral
+event:joy
+event:sadness
+event:fear
+event:anger
+event:affection
+event:curiosity
+event:disgust
+event:surprise
+```
+
+Wait for the bot reply, the printed `state>` line, and the physical transition
+to settle before entering the next command. Do not type the next `event:` while
+the previous response is still streaming. Neutral, Joy, Sadness, Fear, and
+Anger select their accepted physical profiles. Affection, Curiosity, Disgust,
+and Surprise intentionally select `neutral_animal_breath` with fallback reason
+`physical_reaction_not_accepted`; the requested EmotionEngine state remains
+truthful in status. Return to `event:neutral` before shutdown.
 
 Inspect the runner from an optional third terminal without commanding it:
 

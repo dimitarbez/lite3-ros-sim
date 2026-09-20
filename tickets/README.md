@@ -12,19 +12,37 @@ reaction, with explicit neutral fallback for categories that do not yet have
 one. The per-emotion tickets below continue to own choreography, safety gates,
 physical evidence, and operator visual acceptance.
 
+A 2026-09-20 follow-up live OpenAI session also completed
+Neutral -> Sadness -> Fear -> Anger -> Neutral under one SDK owner with every
+observed hard gate intact and a clean release. Joy was deliberately skipped as
+the battery declined to 30% after a preceding repeated-left unload failure. This
+adds functional evidence but does not close the consolidated operator visual
+verdict or change the Neutral-only default allowlist.
+
+A subsequent operator-driven natural-language Joy turn completed one accepted
+left/right gesture and correctly continued because Joy remained current. The
+second left paw missed the unchanged unload gate, safely landed with four
+supports, but the runner classified that recovered contact miss as terminal and
+released; the robot then lay down. The runner is now hardened offline to keep
+every current emotion persistent and, after a safely recovered Joy unload miss,
+complete canonical Neutral and resume Joy under the same owner. The correction
+passed the complete offline gate and is deployed at SHA-256
+`aa449b7883a3baf6ae816fc832dbf3b8b74bb5a1ac88c2e0313f3acab1c8f353`,
+but is not physically revalidated.
+
 ## Ticket index
 
 | Emotion | Ticket | Current state |
 | --- | --- | --- |
 | Neutral | [Neutral breathing](TICKET_NEUTRAL_BREATHING.md) | Implemented and operator-accepted |
-| Joy | [Alternating front-paw joy](TICKET_JOY_FRONT_PAW.md) | Accepted; normal physical selection and mid-paw retarget passed |
+| Joy | [Alternating front-paw joy](TICKET_JOY_FRONT_PAW.md) | Gesture accepted; persistent chat recovery passes offline, live revalidation pending |
 | Affection | [Affection bow and paw offer](TICKET_AFFECTION.md) | Planned |
 | Curiosity | [Curiosity lean and paw hover](TICKET_CURIOSITY.md) | Planned |
 | Sadness | [Sadness lowered posture](TICKET_SADNESS.md) | Planted bow accepted; normal physical selection and retarget passed |
 | Disgust | [Disgust recoil](TICKET_DISGUST.md) | Planned |
 | Fear | [Fear crouch and guarded reaction](TICKET_FEAR.md) | Planted animation accepted; normal physical selection and retarget passed |
 | Surprise | [Surprise rise and freeze](TICKET_SURPRISE.md) | Planned |
-| Anger | [Anger controlled front-paw stomps](TICKET_ANGER.md) | Normal physical selection, repeated loops, and fallback retarget passed |
+| Anger | [Anger controlled front-paw stomps](TICKET_ANGER.md) | Gesture accepted; persistent contact-miss recovery deployed, live revalidation pending |
 
 All tickets inherit the [shared transition rule](#non-negotiable-transition-rule):
 finish any limb recovery, return to canonical stand over 1.5 seconds, hold exact
@@ -38,7 +56,13 @@ neutral for 0.35 seconds, then start only the newest pending emotion.
   gesture documented in [the joy ticket](TICKET_JOY_FRONT_PAW.md). The accepted bounded
   suite completed five seconds of neutral followed by five seconds of joy,
   confirmed unload and landing for both front paws, released SDK ownership,
-  and reported no safety fault.
+  and reported no safety fault. A later natural-language turn exposed unsafe
+  recovery semantics rather than an unsafe motion threshold: Joy correctly
+  remained active, the next left unload missed its hard gate, and the terminal
+  release was followed by the robot lying down. The offline fix keeps Joy
+  repeating while it remains current and uses canonical Neutral as a bounded
+  recovery waypoint before resuming Joy after a safely recovered miss; physical
+  revalidation is still pending.
 - **Sadness's planted bow is operator-accepted.** The paw candidate failed front-left
   unload at `8.875 N`. Three planted redesigns passed telemetry but were judged
   too subtle. A deeper 70 mm front-to-rear bow then reached `10.006 deg` during
@@ -77,6 +101,13 @@ neutral for 0.35 seconds, then start only the newest pending emotion.
   two consecutive repeated loops now also pass after a bounded left support
   transfer correction. A later Anger-to-Disgust run completed the paw
   placement, exact-neutral return, and observable Neutral fallback. The
+  later persistent run exposed a policy regression after a failed unload:
+  controlled landing and all four supports were confirmed, but ownership was
+  still released. The offline correction now takes the existing canonical
+  Neutral recovery and resumes Anger under the same owner only after confirmed
+  landing and four-foot support. It changes no threshold, is deployed at
+  SHA-256 `e72a2db71d1f569b55d5c5af10b82c6b48a6a850513bb71aa3bacd9a84d4e5cd`,
+  and still needs physical revalidation. The
   checked-in allowlist stays neutral-only pending the consolidated operator
   verdict. Affection, curiosity, disgust, and surprise remain Neutral
   fallbacks; all four physical fallback/status checks and the rapid newest-only

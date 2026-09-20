@@ -16,12 +16,13 @@ checked-in configuration. The separate official runtime uses the reviewed
 Deeprcs `2.0.153` layout and an independent lease; its default commissioned
 allowlist contains only the already proven neutral profile.
 
-## One-time fail-closed installation
+## Initial installation and redeployment after source changes
 
 Connect the development computer to the robot Wi-Fi, keep the robot sitting, and
 run the installer from the wrapper root:
 
 ```bash
+cd /home/dimitarbez/Dev/ROS
 make -C lite3-noetic setup-emotion-hardware
 ```
 
@@ -30,6 +31,11 @@ package into the separate `~/emotion_bot_lite3_hw_ws` workspace, builds it
 against ROS Noetic and the existing `message_transformer` package, and installs
 three narrowly scoped systemd services. It never copies into or edits
 `~/lite_cog`, `jy_exe`, or `network.toml`.
+
+Run the same setup target again after changing anything under
+`lite3-noetic/hardware-ws/tools/` or the robot-side hardware package. The normal
+`run-emotion-hardware` target uses the already installed aarch64 runner; it does
+not build or deploy local source changes. Keep the robot sitting during setup.
 
 Only the perception telemetry service and motion-host STOP observer receive
 `CAP_NET_RAW`; the ROS core remains unprivileged. A generated HMAC key
@@ -411,8 +417,10 @@ Fear -> Neutral through the same transition contract.
 
 Final postflight was state/gait/motion `1/0/0`, battery 54%, errors zero,
 centered fresh Retroid, STOP false, released status, and no SDK owner, lock, or
-runner. All functional telemetry gates are closed; only the consolidated
-operator visual verdict and resulting default-allowlist decision remain.
+runner. Those functional telemetry gates passed for that checkpoint; the later
+Joy repeat-stop failure described below reopens Joy's normal-session
+recovery gate. The consolidated operator verdict and resulting default-
+allowlist decision also remain open.
 
 A later live OpenAI retry first exposed intermittent WSL DNS failure and the
 interactive client's shorter wait relative to the configured provider retry
@@ -427,11 +435,179 @@ clean; postflight remained `1/0/0`, battery 41%, errors zero, STOP false, and no
 owner or runner. See the cross-emotion ticket for complete failure and retry
 evidence.
 
-The current clean aarch64 runner passed all nine native suites and is installed
-at SHA-256
+A subsequent authorized live OpenAI session temporarily allowed all five
+accepted profiles. Neutral, Sadness, Fear, Anger, and final Neutral were selected
+under one owner; every observed support/landing gate passed, exact-neutral
+category transitions completed, and all nine brief feedback pauses recovered.
+Joy was intentionally skipped after battery declined from 37% toward 30% and the
+preceding session had exposed a repeated-left unload failure. Shutdown released
+cleanly with state/gait/motion `1/0/0`, battery 30%, zero errors, STOP false, no
+safety fault, and no owner or runner. This evidence does not change the
+Neutral-only checked-in default or substitute for the pending operator visual
+verdict.
+
+The pre-correction aarch64 runner used for that live session passed all nine
+native suites and was installed at SHA-256
 `c2723ef4140a1bda88d18d6bfd09494febb2f2dea8d8db3f9d32b1e683a8025a`.
 It also preserves a hard robot-safety fault as the primary status cause rather
 than overwriting it with a profile recovery diagnostic.
+
+### Persistent Joy recovery hardening — deployed, live revalidation pending — 2026-09-20
+
+A later natural-language OpenAI turn selected Joy correctly and completed one
+full left/right reaction. Joy remained the current state, so the runner
+correctly began another cycle. The next front-left unload retained `12.5215 N`
+and was rejected by the unchanged gate. Lowering and landing completed at
+`36.1785 N` with four supports, then the old policy incorrectly treated the
+recovered miss as terminal and released ownership; the operator saw the robot
+stop and lie down.
+
+Normal Joy is a persistent profile, matching Neutral, Sadness, Fear, and Anger:
+it repeats the accepted left/right cycle while the latest validated engine state
+remains Joy. State sequences update affect and category; heartbeat traffic only
+keeps the link fresh and neither starts nor stops a cycle. A missed unload can
+take a non-releasing recovery only after confirmed landing and four restored
+supports: the runner returns over 1.5 seconds, holds exact Neutral for 0.35
+seconds, and resumes Joy under the same owner. All landing and hard-safety
+failures still release fail-closed. No contact or safety threshold changed. The
+full `verify-hardware-offline` target passes. A no-motion deployment began from
+state/gait/motion `1/0/0`, battery 91%, zero errors, fresh centered Retroid,
+STOP false, active safety services, and no owner. The aarch64 build passed all
+nine native suites and installed SHA-256
+`aa449b7883a3baf6ae816fc832dbf3b8b74bb5a1ac88c2e0313f3acab1c8f353`,
+with the preceding binary retained as a checksum-named backup. The new behavior
+has not yet been exercised physically.
+
+### Persistent Anger contact-miss recovery — deployed, live revalidation pending — 2026-09-20
+
+A normal Anger attempt correctly failed its front-left unload gate at
+`6.24688 N`, then safely completed controlled placement, relatch, four-foot
+hold, and canonical recovery. Landing was confirmed at `28.4243 N` with all
+four supports and the runner reported no robot safety fault, but the old policy
+still released ownership after this recoverable miss.
+
+The development runner now distinguishes that exact normal-chat case from a
+hard failure. Only after confirmed landing and four-foot support does it log
+`ANGER_CONTACT_MISS_RECOVERED`, complete the unchanged 1.5-second canonical
+return and 0.35-second exact-Neutral hold, and resume persistent Anger under the
+same owner. Explicit suites remain fail-closed. Incomplete landing, STOP,
+invalid state, stale/dead feedback, estimator or tracking failure, and every
+other hard gate still release. No threshold or motion amplitude changed. The
+complete `verify-hardware-offline` gate passes. After the robot returned to
+state `1`, a no-motion preflight confirmed gait/motion `0/0`, battery 74%, zero
+errors, fresh centered Retroid, STOP false, and no owner. The clean aarch64
+build passed all nine native suites and installed SHA-256
+`e72a2db71d1f569b55d5c5af10b82c6b48a6a850513bb71aa3bacd9a84d4e5cd`,
+with `aa449...` preserved as a checksum-named backup. Postflight remained
+`1/0/0`, battery 73%, errors zero, STOP false, and released. No motion command
+was sent, so physical revalidation remains open.
+
+## Copy-paste Joy recovery validation
+
+Use this sequence only for an explicitly authorized physical session. Before
+starting, stop any older chat client with `:quit` or `Ctrl+C`, keep the robot
+sitting in basic state `1`, confirm battery above the selected floor, make STOP
+available, clear the area, and ensure no other MotionSDK/Retroid sender owns the
+robot.
+
+After changing the runner, deploy it once from the development computer:
+
+```bash
+cd /home/dimitarbez/Dev/ROS
+make -C lite3-noetic setup-emotion-hardware
+```
+
+For the first validation, expose only Neutral and Joy.
+
+Terminal 1 — continuous owner, OpenAI bridge, brain, and hardware runner:
+
+```bash
+cd /home/dimitarbez/Dev/ROS
+HARDWARE_COMMISSIONED_EMOTIONS=neutral,joy \
+HARDWARE_MINIMUM_BATTERY=25 \
+HARDWARE_EXPRESSION_SCALE=1.0 \
+make -C lite3-noetic run-emotion-hardware
+```
+
+Terminal 2 — interactive chat:
+
+```bash
+cd /home/dimitarbez/Dev/ROS
+make -C lite3-noetic run-emotion-chat
+```
+
+Send one Joy prompt and wait for at least two complete left/right reactions
+before entering another message. The expected result is continued Joy cycles
+under the same SDK owner for as long as Joy remains current. Then send
+`event:neutral`; the active paw must lower, exact-Neutral return/hold must
+complete, and Neutral breathing must continue without lying down. If a Joy
+unload miss occurs after a confirmed landing with four restored supports, expect
+`JOY_CONTACT_MISS_RECOVERED` followed by canonical Neutral and resumed Joy—not a
+runner exit.
+
+Optional terminal 3 — read-only status:
+
+```bash
+cd /home/dimitarbez/Dev/ROS
+make -C lite3-noetic watch-emotion-hardware-status
+```
+
+End chat with `:quit`, then press `Ctrl+C` in terminal 1 and wait for the runner
+to report release. Do not close terminal 1 first while a paw phase is active.
+
+For the focused Anger recovery revalidation, use the same preflight and chat
+terminal but start the owner with only Neutral and Anger exposed:
+
+```bash
+cd /home/dimitarbez/Dev/ROS
+HARDWARE_COMMISSIONED_EMOTIONS=neutral,anger \
+HARDWARE_MINIMUM_BATTERY=25 \
+HARDWARE_EXPRESSION_SCALE=1.0 \
+make -C lite3-noetic run-emotion-hardware
+```
+
+Enter `event:anger` once and wait for at least two complete reactions. Anger
+must keep repeating while it remains current. If an unload miss is followed by
+a confirmed target landing and four restored supports, expect
+`ANGER_CONTACT_MISS_RECOVERED`, exact-Neutral recovery/hold, and resumed Anger
+under the same owner. Any incomplete landing or hard safety failure must still
+release. Finish with `event:neutral`, wait for Neutral breathing, exit chat with
+`:quit`, and only then press `Ctrl+C` in the owner terminal.
+
+Only after the bounded Joy validation passes, the previously accepted profile
+set can be selected explicitly for a later authorized session:
+
+```bash
+cd /home/dimitarbez/Dev/ROS
+HARDWARE_COMMISSIONED_EMOTIONS=neutral,joy,sadness,fear,anger \
+HARDWARE_MINIMUM_BATTERY=25 \
+HARDWARE_EXPRESSION_SCALE=1.0 \
+make -C lite3-noetic run-emotion-hardware
+```
+
+Use these chat commands one at a time, waiting for the reply, printed state, and
+physical transition before sending the next command:
+
+```text
+event:neutral
+event:joy
+event:sadness
+event:fear
+event:anger
+event:affection
+event:curiosity
+event:disgust
+event:surprise
+```
+
+The first five categories above have accepted physical profiles. Affection,
+Curiosity, Disgust, and Surprise remain valid EmotionEngine states but
+intentionally resolve to `neutral_animal_breath` with
+`physical_reaction_not_accepted`; naming them in the environment allowlist does
+not enable an unaccepted motion. Send `event:neutral` and wait for Neutral before
+ending the chat and releasing the owner.
+
+The checked-in default remains Neutral-only.
 
 ## Development-side commands
 

@@ -4,7 +4,7 @@
 [Reference: accepted joy machinery](TICKET_JOY_FRONT_PAW.md) ·
 [Previous: Surprise](TICKET_SURPRISE.md)
 
-## Status — normal physical selection, repetition, and retarget passed
+## Status — gesture accepted; persistent contact-miss recovery deployed, live revalidation pending
 
 The controlled placement state machine, normal chat selection, newest-request
 retargeting, bounds, contact gates, and offline tests are implemented. The
@@ -24,7 +24,7 @@ new session used the configured 25% project floor and completed the same
 retarget without changing any source threshold or other hard gate.
 
 The currently installed integrated runner SHA-256 is
-`c2723ef4140a1bda88d18d6bfd09494febb2f2dea8d8db3f9d32b1e683a8025a`.
+`e72a2db71d1f569b55d5c5af10b82c6b48a6a850513bb71aa3bacd9a84d4e5cd`.
 The earlier explicit canonical-reset suite runner was
 `a77433ace5afb56a4bbd204df28c167cf7d46022d2b3155568086ac78fdd630c`.
 The previously accepted joy runner remains preserved under its checksum-named
@@ -302,6 +302,44 @@ seconds, held exact neutral for 0.35 seconds, and activated
 `neutral_animal_breath`. Status preserved `requested_emotion=disgust`, reported
 `fallback_active=true`, four supports, no fault, and uninterrupted ownership.
 The session later released without a safety fault or ownership leak.
+
+## Persistent Anger contact-miss regression and offline correction — 2026-09-20
+
+After the persistent Joy correction was deployed, a normal chat-driven Anger
+run reached its first front-left placement but retained `6.24688 N` on the
+target paw, so the unchanged unload gate correctly reported
+`ANGER_UNLOAD ... confirmed=false`. The runner nevertheless completed the
+controlled placement, landing dwell, one-second canonical relatch, and
+0.35-second four-foot hold. Landing was confirmed at `28.4243 N`, support count
+was four, and the four filtered loads were
+`28.4243/23.2969/30.0154/38.4726 N`. It then completed the 1.5-second canonical
+recovery but treated the recovered unload miss as terminal and released SDK
+ownership. No robot safety fault occurred. One feedback pause recovered within
+the existing watchdog; maximum feedback age/update gap was
+`149.276/150.027 ms` and maximum pause was `74.0034 ms`.
+
+This is the same policy class as the earlier Joy regression, not permission to
+weaken the unload gate. The development runner now returns a distinct recovered
+contact-miss result only when normal chat mode has completed controlled
+placement and confirmed both the target landing and all four supports. It logs
+`ANGER_CONTACT_MISS_RECOVERED`, skips the assertive hold, performs the existing
+1.5-second canonical return plus 0.35-second exact-Neutral hold, and resumes
+Anger under the same continuous owner when Anger is still current. Explicit
+commissioning suites remain fail-closed, and incomplete landing, STOP, stale or
+invalid feedback, state failure, tracking failure, estimator failure, and every
+other hard fault still release. No motion amplitude, contact threshold, or
+safety limit changed.
+
+The correction passes all nine native suites, 29 Python safety/protocol tests,
+a clean Release catkin build, and the loopback ownership/watchdog integration
+through `make -C lite3-noetic verify-hardware-offline`. After the robot returned
+to basic state `1`, a fresh no-motion preflight confirmed gait/motion `0/0`,
+battery 74%, errors zero, fresh centered Retroid, STOP false, and no owner. The
+clean aarch64 build passed all nine native suites and installed SHA-256
+`e72a2db71d1f569b55d5c5af10b82c6b48a6a850513bb71aa3bacd9a84d4e5cd`;
+the previous `aa449...` binary remains as a checksum-named backup. Postflight
+remained state/gait/motion `1/0/0`, battery 73%, errors zero, STOP false, and no
+owner or runner. No motion command was sent, so live revalidation remains open.
 
 ## Non-goals
 

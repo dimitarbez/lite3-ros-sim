@@ -48,11 +48,42 @@ The simulator consumes `sensor_msgs/Joy`; it does not instantiate its `/cmd_vel`
 
 ## Split-host hardware graph
 
-Hardware is a different graph, workspace, configuration, and operator workflow. It never starts from `run-emotion-sim*`. With the robot sitting, install the fail-closed services once:
+Hardware is a different graph, workspace, configuration, and operator workflow. It never starts from `run-emotion-sim*`. With the robot sitting, initially install the fail-closed services:
 
 ```bash
 make -C lite3-noetic setup-emotion-hardware
 ```
+
+Repeat `setup-emotion-hardware` after any local runner or hardware-package
+change; the run target does not deploy source. For the bounded Joy recovery
+validation, terminal one must explicitly limit the allowlist:
+
+```bash
+HARDWARE_COMMISSIONED_EMOTIONS=neutral,joy \
+HARDWARE_MINIMUM_BATTERY=25 \
+HARDWARE_EXPRESSION_SCALE=1.0 \
+make -C lite3-noetic run-emotion-hardware
+```
+
+Then use `make -C lite3-noetic run-emotion-chat` in terminal two. See the
+[usage runbook](USAGE.md#separately-authorized-physical-expression-session) for
+the expected persistent Joy result, status monitoring, full accepted-profile
+command, and shutdown order.
+
+The full accepted physical-profile session uses:
+
+```bash
+HARDWARE_COMMISSIONED_EMOTIONS=neutral,joy,sadness,fear,anger \
+HARDWARE_MINIMUM_BATTERY=25 \
+HARDWARE_EXPRESSION_SCALE=1.0 \
+make -C lite3-noetic run-emotion-hardware
+```
+
+All nine chat categories remain addressable with `event:<emotion>`. Neutral,
+Joy, Sadness, Fear, and Anger select accepted motion; Affection, Curiosity,
+Disgust, and Surprise preserve the requested state while resolving to Neutral
+breathing. Operators send one event at a time and wait for its response/state
+and physical transition before sending the next.
 
 Normal use is then two terminals:
 

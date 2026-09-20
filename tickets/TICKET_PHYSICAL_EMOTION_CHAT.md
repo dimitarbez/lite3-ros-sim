@@ -4,7 +4,7 @@
 [Hardware runtime](../lite3-noetic/hardware-ws/README.md) ·
 [ROS chat and EmotionEngine adapter](../lite3-noetic/ws/Lite3_VMC/src/emotion_bot_ros/README.md)
 
-## Status — implemented; live functional gates passed, operator verdict pending
+## Status — implemented; Joy/Anger recovery revalidation and operator verdict pending
 
 The development-computer chat, `EmotionEngine`, validated emotion-state uplink,
 and continuous robot-side MotionSDK owner now drive the accepted Neutral, Joy,
@@ -22,6 +22,12 @@ changing any code or weakening any other safety gate. That session closed the
 Anger-to-Disgust, unsupported-category, rapid-retarget, and final-release
 telemetry gates. The normal checked-in allowlist remains `neutral` until the
 operator records the consolidated visual verdict for the complete sweep.
+A later natural-language Joy run exposed a terminal release after a safely
+recovered unload miss. The new persistent/non-releasing recovery policy also
+requires live revalidation before Joy can be considered closed end to end.
+The subsequent Anger run exposed the same release-policy class after confirmed
+landing and four-foot recovery; its non-releasing correction is deployed and
+also requires live revalidation.
 
 This ticket connects those accepted reactions to the same conversation-driven
 emotional state used by Gazebo. It does not authorize a physical run by itself.
@@ -75,9 +81,9 @@ Compiled profiles, planted prototypes, and rejected candidates do not qualify.
 | EmotionEngine category | Physical reaction at ticket completion | Current integration state |
 | --- | --- | --- |
 | `neutral` | Accepted 3.25-second animal-like breathing | Normal hardware path accepted |
-| `joy` | Accepted 50 mm alternating front-paw joy gesture | Normal physical selection and mid-paw retarget passed |
+| `joy` | Accepted 50 mm alternating front-paw joy gesture | Persistent recovery deployed; live revalidation pending |
 | `sadness` | Accepted front-only 48 mm planted bow and heave loop | Normal physical selection and exact-neutral retarget passed |
-| `anger` | Accepted canonical-reset alternating controlled paw placements | Normal physical selection, repeated loops, and mid-motion fallback retarget passed |
+| `anger` | Accepted canonical-reset alternating controlled paw placements | Persistent recovery deployed; live revalidation pending |
 | `fear` | Accepted all-feet-planted flinch/recoil/cower/freeze loop | Normal physical selection and Fear-to-Anger retarget passed |
 | `affection` | Neutral breathing fallback | Final physical reaction not implemented and accepted |
 | `curiosity` | Neutral breathing fallback | Final physical reaction not implemented and accepted |
@@ -351,8 +357,8 @@ That check also exposed and fixed the standalone tunnel target: its prior
 `ClearAllForwardings=yes` option silently removed its own `-L` forward. The
 corrected target opened `127.0.0.1:8767`, and the five turns above traversed it.
 
-The current clean aarch64 runner passed all nine native suites and is installed
-at SHA-256
+The pre-correction aarch64 runner used for the following live sessions passed
+all nine native suites and was installed at SHA-256
 `c2723ef4140a1bda88d18d6bfd09494febb2f2dea8d8db3f9d32b1e683a8025a`.
 Its fault precedence also ensures a hard battery/attitude/state safety abort is
 not mislabeled as a choreography support-recovery failure.
@@ -395,6 +401,90 @@ bounded feedback pauses recovered; maximum feedback age/update gap was
 marker with no robot safety fault. Fresh postflight was state/gait/motion
 `1/0/0`, battery 41%, errors zero, roll/pitch `-0.188/1.454 deg`, centered fresh
 Retroid, STOP false, released Neutral status, and no SDK owner, lock, or runner.
+
+### Follow-up accepted-profile OpenAI session — 2026-09-20
+
+A later explicitly authorized session used the temporary accepted-profile
+allowlist `neutral,joy,sadness,fear,anger` at scale `1.0` and the unchanged 25%
+hard battery floor. Read-only preflight and acquisition both began at
+state/gait/motion `1/0/0`, battery 37%, errors zero, STOP false, compatible
+fresh telemetry, active safety services, no competing runner, and the installed
+runner SHA-256 recorded above. The exact-stand contact hold accepted 694 samples
+and reported `124.732 N`; per-foot baseline values in status were
+`28.4165/24.2228/35.9225/38.4533 N`.
+
+All six turns streamed real OpenAI responses and printed
+`chat_backend=openai`. A natural-language sad message remained Neutral at
+valence/arousal `-0.420/0.300`; this was a valid deterministic appraisal, not a
+transport failure. Explicit `event:sadness`, `event:fear`, `event:anger`, and
+`event:neutral` turns then selected the corresponding accepted profiles under
+one uninterrupted SDK owner. Sadness retained four supports through every
+observed bow/heave cycle. Fear entered only after Sadness recovery and the
+1.5-second plus 0.35-second exact-neutral transition. Anger did the same from
+Fear; its first complete left/right pair confirmed unload at `4.910/0.732 N`
+and restored four-foot landing at `27.005/25.937 N`. Subsequent repeated Anger
+placements also retained their unload and landing gates. The final Neutral turn
+completed Anger recovery and the exact-neutral hold before shutdown.
+
+Battery declined from 37% to 30%, so Joy was deliberately not requested after
+the immediately preceding session's repeated-left unload failure. Nine bounded
+feedback pauses all recovered; maximum age/gap was `148.692/147.822 ms` and
+maximum pause was `78.006 ms`. Operator Ctrl-C produced the expected termination
+status and exit 130 after release. The runner reported no robot safety fault,
+removed the ownership marker, and left no process. Fresh postflight was
+state/gait/motion `1/0/0`, battery 30%, errors zero, roll/pitch
+`0.242/0.008 deg`, STOP false, four estimated supports, and released Neutral
+status. This adds functional evidence; the operator's consolidated visual
+verdict and default-allowlist decision remain open.
+
+### Natural-language Joy repeat regression — 2026-09-20
+
+A later ordinary OpenAI prompt correctly produced Joy at valence/arousal
+`0.700/0.600`. The robot completed one full alternating-paw reaction, with both
+unload and landing gates passing. Joy remained the current engine state, so the
+runner correctly began the next cycle without requiring another chat turn. The
+second left lift retained `12.5215 N`; the hard unload gate rejected it, the paw
+landed at `36.1785 N` with four supports, and the runner released without a
+robot safety fault. The operator observed that the robot stopped and lay down.
+
+The offline correction keeps Joy active and repeating until the validated
+engine category changes or the link becomes stale. State-sequence gating keeps
+heartbeats from being mistaken for new semantic updates, but it does not stop
+the current profile. A contact miss with confirmed landing/four-foot recovery
+now completes the existing 1.5 + 0.35-second exact-Neutral contract and resumes
+Joy under the same owner; incomplete landing and every hard safety fault still
+release. The complete offline hardware gate passes and no threshold changed. A
+no-motion aarch64 build/deployment also passed all nine native suites and
+installed SHA-256
+`aa449b7883a3baf6ae816fc832dbf3b8b74bb5a1ac88c2e0313f3acab1c8f353`
+from a clean sitting/no-owner preflight. The correction is deployed but not
+live-validated, so normal Joy recovery remains open and the checked-in allowlist
+remains Neutral-only.
+
+### Persistent Anger unload-miss regression — 2026-09-20
+
+The next normal Anger attempt correctly rejected a front-left unload at
+`6.24688 N`. Controlled placement, the landing dwell, canonical relatch, and
+the four-foot hold all completed; landing was confirmed at `28.4243 N` with
+four supports and loads of `28.4243/23.2969/30.0154/38.4726 N`. The runner then
+completed the 1.5-second recovery but classified the safely recovered contact
+miss as terminal and released ownership. No robot safety fault occurred. One
+bounded feedback pause recovered, with maximum age/gap of
+`149.276/150.027 ms` and a `74.0034 ms` maximum pause.
+
+The development correction mirrors Joy's non-releasing policy without changing
+any gate: normal chat Anger may return a recovered-contact result only after
+confirmed target landing and four-foot support, completes the existing 1.5 +
+0.35-second exact-Neutral contract, logs `ANGER_CONTACT_MISS_RECOVERED`, and
+resumes Anger if it remains current. Explicit suites and every incomplete
+landing or hard safety failure remain terminal. The full offline hardware gate
+passes. Once the robot returned to sitting state `1`, a fresh no-motion
+preflight confirmed gait/motion `0/0`, battery 74%, errors zero, centered fresh
+Retroid, STOP false, and no owner. The clean aarch64 build passed all nine
+native suites and installed SHA-256
+`e72a2db71d1f569b55d5c5af10b82c6b48a6a850513bb71aa3bacd9a84d4e5cd`.
+Postflight remained `1/0/0`, battery 73%, errors zero, STOP false, and released.
+No motion command was sent, so live validation remains pending.
 
 ## Acceptance criteria
 

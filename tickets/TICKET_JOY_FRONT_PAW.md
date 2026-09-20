@@ -4,7 +4,7 @@
 [Neutral reference](TICKET_NEUTRAL_BREATHING.md) ·
 [Next: Affection](TICKET_AFFECTION.md)
 
-## Status — accepted and validated through normal physical chat selection
+## Status — persistent chat recovery deployed; live revalidation pending
 
 **The physical joy gesture is implemented, telemetry-validated, and
 operator-accepted.** It is a five-second alternating front-paw expression, not
@@ -18,6 +18,10 @@ The accepted live suite was invoked explicitly with the joy suite enabled and a
 50 mm paw-lift target. The continuous runner now selects this trajectory for an
 allowlisted Joy state, and its normal state-driven selection plus lower-first
 Joy-to-Neutral and Joy-to-unsupported retargets passed physically on 2026-09-20.
+A later natural-language Joy turn exposed that a safely recovered unload miss
+was still classified as a terminal session failure. The persistent recovery
+correction described below passes offline and aarch64 verification and is now
+deployed, but has not been physically revalidated.
 
 ## Accepted behavior
 
@@ -117,8 +121,12 @@ unloaded. The accepted gate therefore requires:
 - restored target contact and four-foot support after landing.
 
 This preserves a quantitative support requirement while allowing the observed
-stable diagonal distribution. A missed unload or landing does not strand the
-paw: the runner completes lowering and settling, reports failure, and releases.
+stable diagonal distribution. A missed unload or landing never strands the
+paw. The explicit commissioning suite and unsafe/incomplete landing paths still
+fail and release. In normal chat, the offline-hardened path treats only an
+unchanged-threshold unload miss followed by a confirmed four-foot landing as a
+recoverable event: it completes exact Neutral, retains the sole owner, and
+resumes Joy if Joy is still the current emotion.
 
 ## Transition and preemption requirements
 
@@ -195,6 +203,48 @@ transition. Status retained `requested_emotion=surprise` while selecting
 `neutral_animal_breath` with fallback reason
 `physical_reaction_not_accepted`.
 
-The final integrated aarch64 runner, including the unchanged hard gates, is
-installed at SHA-256
+The pre-correction integrated aarch64 runner used for those live checks,
+including the unchanged hard gates, was installed at SHA-256
 `c2723ef4140a1bda88d18d6bfd09494febb2f2dea8d8db3f9d32b1e683a8025a`.
+
+## Natural-language Joy repeat-stop failure and offline correction — 2026-09-20
+
+The operator entered “you are so amazing we love you!” in the live OpenAI chat.
+The correlated state was Joy at valence/arousal `0.700/0.600`. With a valid
+684-sample, `124.444 N` baseline, the first complete Joy reaction passed:
+front-left unload/landing was `3.49652/32.7384 N`, and front-right was
+`4.58882/30.6913 N`. Because Joy was still current, the runner correctly
+started a second reaction without requiring another conversational event. Its
+front-left paw retained
+`12.5215 N`, so the unchanged unload gate rejected it. The paw was lowered and
+landed at `36.1785 N` with all four supports restored, after which the runner
+released with no robot safety fault. The operator observed that the robot moved
+in Joy, stopped, and then lay down; that final posture followed the ownership
+release, not an OpenAI classification failure.
+
+The offline correction makes normal Joy persistent like the other commissioned
+profiles:
+
+- the accepted alternating-paw reaction repeats while Joy remains the latest
+  validated EmotionEngine category;
+- new state sequences still update the engine, while transport heartbeats only
+  maintain link freshness and neither start nor stop the current profile;
+- successful Joy cycles use their accepted settle phase and continue without
+  releasing MotionSDK ownership;
+- an unload miss is recoverable only after the paw is down and four supports
+  are confirmed; it performs the 1.5-second canonical return and 0.35-second
+  Neutral hold, logs `JOY_CONTACT_MISS_RECOVERED`, and resumes Joy if it remains
+  current; and
+- landing, STOP, robot-state, feedback, estimator, and other hard failures keep
+  their existing fail-closed release behavior.
+
+No unload, support, landing, workspace, attitude, battery, STOP, or feedback
+threshold changed. `make -C lite3-noetic verify-hardware-offline` passed all
+nine native suites, 29 Python tests, the clean catkin build, and the loopback
+ownership/watchdog integration. A no-motion deployment from state/gait/motion
+`1/0/0`, battery 91%, zero errors, fresh centered Retroid, STOP false, and no
+owner then passed all nine aarch64 suites and installed SHA-256
+`aa449b7883a3baf6ae816fc832dbf3b8b74bb5a1ac88c2e0313f3acab1c8f353`.
+The old `c2723...` binary was retained as a checksum-named backup. This is not
+physical acceptance evidence; bounded persistent-Joy revalidation is still
+required.

@@ -140,6 +140,32 @@ class EmotionRetargetTracker {
   double arousal_{0.2};
 };
 
+// Transport heartbeats deliberately advance their transport sequence while
+// preserving the engine state's sequence. Only semantic state updates should
+// be forwarded to the expression engine; the already-active physical profile
+// continues independently until that state changes or the link becomes stale.
+class EmotionStateSequenceGate {
+ public:
+  bool Accept(const std::string& session_id, uint64_t sequence) {
+    if (initialized_ && session_id == last_session_id_ &&
+        sequence == last_sequence_) {
+      return false;
+    }
+    initialized_ = true;
+    last_session_id_ = session_id;
+    last_sequence_ = sequence;
+    return true;
+  }
+
+  uint64_t last_sequence() const { return last_sequence_; }
+  const std::string& last_session_id() const { return last_session_id_; }
+
+ private:
+  bool initialized_{false};
+  std::string last_session_id_;
+  uint64_t last_sequence_{0};
+};
+
 struct GazeboKeyframe {
   double duration;
   double height;

@@ -148,6 +148,25 @@ int main() {
     assert(joy_engine.active() == "neutral");
   }
 
+  // Engine updates are accepted by state sequence, never by transport
+  // heartbeat. The active Joy profile nevertheless remains Joy between state
+  // updates and same-category appraisals do not restart its trajectory.
+  EmotionStateSequenceGate state_gate;
+  ExpressionEngine persistent_joy({"neutral", "joy"});
+  assert(state_gate.Accept("session-a", 50));
+  persistent_joy.CompleteExternalNeutralTransition("joy", 0.7, 0.6, 0.0);
+  assert(persistent_joy.active() == "joy");
+  assert(persistent_joy.phase() == "profile");
+  assert(!state_gate.Accept("session-a", 50));
+  assert(persistent_joy.active() == "joy");
+  assert(state_gate.Accept("session-a", 51));
+  persistent_joy.Request("joy", 0.8, 0.7, 6.0);
+  assert(persistent_joy.active() == "joy");
+  assert(persistent_joy.phase() == "profile");
+  persistent_joy.CompleteExternalNeutralTransition("joy", 0.8, 0.7, 8.0);
+  assert(persistent_joy.active() == "joy");
+  assert(state_gate.Accept("session-b", 1));
+
   // The official owner is the only fake sender instantiated in this harness;
   // Retroid and legacy action senders have no execution path here.
   return 0;

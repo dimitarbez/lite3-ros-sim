@@ -1163,22 +1163,29 @@ bool RunNeutralTestWindow(Sender* sender, FeedbackSource* receiver,
   return completed && !safety_fault;
 }
 
-bool RunJoyPawTest(Sender* sender, FeedbackSource* receiver,
-                   RobotStateSource* robot_state, RobotCmd* command,
-                   FeedbackPauseStats* pause_stats, FootLoadMonitor* monitor,
-                   StopSource* stop_source, SequenceRecordWriter* status_writer,
-                   ExpressionStatus* status, double test_lift,
-                   bool five_second_suite = false,
-                   EmotionRetargetTracker* retarget_tracker = nullptr,
-                   EmotionSource* emotion_source = nullptr,
-                   const std::set<std::string>* commissioned = nullptr) {
+enum class JoyRunResult {
+  kComplete,
+  kRecoveredContactMiss,
+  kFatal,
+};
+
+JoyRunResult RunJoyPawTest(
+    Sender* sender, FeedbackSource* receiver,
+    RobotStateSource* robot_state, RobotCmd* command,
+    FeedbackPauseStats* pause_stats, FootLoadMonitor* monitor,
+    StopSource* stop_source, SequenceRecordWriter* status_writer,
+    ExpressionStatus* status, double test_lift,
+    bool five_second_suite = false,
+    EmotionRetargetTracker* retarget_tracker = nullptr,
+    EmotionSource* emotion_source = nullptr,
+    const std::set<std::string>* commissioned = nullptr) {
   constexpr double kDiagonalSupportZ = 0.0;
   const bool chat_runtime = retarget_tracker != nullptr &&
       emotion_source != nullptr && commissioned != nullptr;
   if ((retarget_tracker != nullptr || emotion_source != nullptr ||
        commissioned != nullptr) && !chat_runtime) {
     status->last_fault = "incomplete joy chat-retarget configuration";
-    return false;
+    return JoyRunResult::kFatal;
   }
   const double transfer_seconds = five_second_suite ? 0.50 : 1.00;
   const double lift_seconds = five_second_suite ? 0.60 : 1.00;
@@ -1187,7 +1194,7 @@ bool RunJoyPawTest(Sender* sender, FeedbackSource* receiver,
   const double settle_seconds = five_second_suite ? 0.50 : 1.00;
   if (!monitor->baseline_valid() || monitor->support_count() != 4) {
     std::cerr << "ABORT paw test requires a valid four-foot baseline" << std::endl;
-    return false;
+    return JoyRunResult::kFatal;
   }
   status->requested = "joy";
   status->active = "joy";
@@ -1211,6 +1218,7 @@ bool RunJoyPawTest(Sender* sender, FeedbackSource* receiver,
   };
   observe_request();
 
+  bool recovered_contact_miss = false;
   for (int leg = 0; leg < 2; ++leg) {
     if (chat_runtime && !retarget_tracker->may_start_next_phase()) break;
     const std::string side = leg == 0 ? "front_left" : "front_right";
@@ -1262,7 +1270,8 @@ bool RunJoyPawTest(Sender* sender, FeedbackSource* receiver,
               << " force_n=" << monitor->filtered()[leg]
               << " support_count=" << monitor->support_count() << std::endl;
 
-    // A missed unload still lowers the paw before the test reports failure.
+    // A missed unload still lowers the paw before deciding whether normal chat
+    // may recover and continue or the bounded commissioning suite must fail.
     if (okay && lift_started) {
       okay = RunPawLiftSegment(
           "paw_lower_" + side, leg, test_lift, 0.0,
@@ -1276,7 +1285,12 @@ bool RunJoyPawTest(Sender* sender, FeedbackSource* receiver,
     const bool retarget_before_settle = chat_runtime &&
         retarget_tracker->cancellation_requested();
     if (okay) {
-      const double return_seconds = retarget_before_settle
+      // A retarget or missed unload takes the full canonical return. A normal
+      // completed paw uses its accepted settle duration so Joy can keep
+      // looping while Joy remains the current emotion.
+      const bool full_neutral_return = chat_runtime &&
+          (retarget_before_settle || !unload_confirmed);
+      const double return_seconds = full_neutral_return
           ? ExpressionEngine::kNeutralReturnSeconds : settle_seconds;
       okay = RunPawLiftSegment(
           "paw_settle_" + side, leg, 0.0, 0.0,
@@ -1303,7 +1317,7 @@ bool RunJoyPawTest(Sender* sender, FeedbackSource* receiver,
               << " confirmed=" << (landing_confirmed ? "true" : "false")
               << " force_n=" << monitor->filtered()[leg]
               << " support_count=" << monitor->support_count() << std::endl;
-    if (!okay || !unload_confirmed || !landing_confirmed) {
+    if (!okay || !landing_confirmed) {
       if (status->last_fault.empty()) {
         status->last_fault = g_safety_fault.load()
             ? "robot safety gate aborted active paw phase"
@@ -1311,12 +1325,34 @@ bool RunJoyPawTest(Sender* sender, FeedbackSource* receiver,
       }
       status->estimated_contact_motion_gate_enabled = false;
       PublishExpressionStatus(status_writer, *status);
-      return false;
+      return JoyRunResult::kFatal;
+    }
+    if (!unload_confirmed) {
+      if (!chat_runtime || g_safety_fault.load()) {
+        if (status->last_fault.empty()) {
+          status->last_fault = g_safety_fault.load()
+              ? "robot safety gate aborted active paw phase"
+              : "paw unload or landing confirmation failed";
+        }
+        status->estimated_contact_motion_gate_enabled = false;
+        PublishExpressionStatus(status_writer, *status);
+        return JoyRunResult::kFatal;
+      }
+      // The contact gate correctly rejected this lift, but the commanded paw
+      // is down again and all four supports are confirmed. Keep the sole owner,
+      // finish the exact-neutral hold, and let the still-current Joy profile
+      // begin another bounded cycle.
+      recovered_contact_miss = true;
+      std::cout << "JOY_CONTACT_MISS_RECOVERED side=" << side
+                << " action=canonical_neutral_then_resume_current_emotion"
+                << std::endl;
+      break;
     }
     if (chat_runtime && retarget_tracker->cancellation_requested()) break;
   }
   bool neutral_hold_okay = true;
-  if (chat_runtime && retarget_tracker->cancellation_requested()) {
+  if (chat_runtime &&
+      (recovered_contact_miss || retarget_tracker->cancellation_requested())) {
     neutral_hold_okay = RunPawLiftSegment(
         "joy_neutral_hold", 0, 0.0, 0.0,
         0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
@@ -1325,38 +1361,53 @@ bool RunJoyPawTest(Sender* sender, FeedbackSource* receiver,
         stop_source, status, status_writer, 0.0, 0.0, 0.0, 0.0,
         observe_request);
   }
-  status->active = "neutral";
-  status->active_profile = "neutral_animal_breath";
-  status->phase = chat_runtime && retarget_tracker->cancellation_requested()
-      ? "joy_external_neutral_complete" : "paw_test_complete";
+  const bool neutral_transition = recovered_contact_miss ||
+      (chat_runtime && retarget_tracker->cancellation_requested());
+  status->active = neutral_transition ? "neutral" : "joy";
+  status->active_profile = neutral_transition
+      ? "neutral_animal_breath" : "joy_alternating_front_paws_50mm";
+  status->phase = recovered_contact_miss
+      ? "joy_contact_miss_recovered"
+      : (chat_runtime && retarget_tracker->cancellation_requested()
+          ? "joy_external_neutral_complete"
+          : (chat_runtime ? "joy_cycle_complete" : "paw_test_complete"));
   status->estimated_contact_motion_gate_enabled = false;
   PublishExpressionStatus(status_writer, *status);
-  return neutral_hold_okay;
+  if (!neutral_hold_okay) return JoyRunResult::kFatal;
+  return recovered_contact_miss
+      ? JoyRunResult::kRecoveredContactMiss : JoyRunResult::kComplete;
 }
 
-bool RunAngerStompTest(Sender* sender, FeedbackSource* receiver,
-                       RobotStateSource* robot_state, RobotCmd* command,
-                       FeedbackPauseStats* pause_stats,
-                       FootLoadMonitor* monitor, StopSource* stop_source,
-                       SequenceRecordWriter* status_writer,
-                       ExpressionStatus* status, double test_lift,
-                       int first_leg, bool alternating_suite,
-                       AngerRetargetTracker* retarget_tracker = nullptr,
-                       EmotionSource* emotion_source = nullptr,
-                       const std::set<std::string>* commissioned = nullptr) {
+enum class AngerRunResult {
+  kComplete,
+  kRecoveredContactMiss,
+  kFatal,
+};
+
+AngerRunResult RunAngerStompTest(
+    Sender* sender, FeedbackSource* receiver,
+    RobotStateSource* robot_state, RobotCmd* command,
+    FeedbackPauseStats* pause_stats,
+    FootLoadMonitor* monitor, StopSource* stop_source,
+    SequenceRecordWriter* status_writer,
+    ExpressionStatus* status, double test_lift,
+    int first_leg, bool alternating_suite,
+    AngerRetargetTracker* retarget_tracker = nullptr,
+    EmotionSource* emotion_source = nullptr,
+    const std::set<std::string>* commissioned = nullptr) {
   constexpr double kDiagonalSupportZ = 0.0;
   const bool chat_runtime = retarget_tracker != nullptr &&
       emotion_source != nullptr && commissioned != nullptr;
   if ((retarget_tracker != nullptr || emotion_source != nullptr ||
        commissioned != nullptr) && !chat_runtime) {
     status->last_fault = "incomplete anger chat-retarget configuration";
-    return false;
+    return AngerRunResult::kFatal;
   }
   if (!AngerStompLimitsValid(test_lift) ||
       !monitor->baseline_valid() || monitor->support_count() != 4) {
     std::cerr << "ABORT anger test requires valid bounds and four-foot baseline"
               << std::endl;
-    return false;
+    return AngerRunResult::kFatal;
   }
   status->requested = "anger";
   status->active = "anger";
@@ -1396,6 +1447,7 @@ bool RunAngerStompTest(Sender* sender, FeedbackSource* receiver,
 
   const int stomp_count = alternating_suite ? 2 : 1;
   bool gate_failure = false;
+  bool recovered_contact_miss = false;
   double current_shift_x = 0.0;
   double current_shift_y = 0.0;
   double current_common_z = okay ? kAngerBraceMeters : 0.0;
@@ -1506,9 +1558,25 @@ bool RunAngerStompTest(Sender* sender, FeedbackSource* receiver,
               << monitor->filtered()[1] << ',' << monitor->filtered()[2]
               << ',' << monitor->filtered()[3]
               << " dwell_s=" << kAngerLandingDwellSeconds << std::endl;
-    if (!okay || !unload_confirmed || !landing_confirmed) {
+    if (!okay || !landing_confirmed) {
       status->last_fault = "anger unload or four-foot landing dwell failed";
       gate_failure = true;
+      break;
+    }
+    if (!unload_confirmed) {
+      if (!chat_runtime || g_safety_fault.load()) {
+        status->last_fault = "anger unload or four-foot landing dwell failed";
+        gate_failure = true;
+        break;
+      }
+      // The target paw did not unload enough to count as an Anger placement,
+      // but it is down again and all four supports are confirmed. Normal chat
+      // keeps the exclusive owner, completes canonical recovery, and resumes
+      // Anger if Anger is still current. Explicit suites remain fail-closed.
+      recovered_contact_miss = true;
+      std::cout << "ANGER_CONTACT_MISS_RECOVERED side=" << side
+                << " action=canonical_neutral_then_resume_current_emotion"
+                << std::endl;
       break;
     }
   }
@@ -1517,7 +1585,7 @@ bool RunAngerStompTest(Sender* sender, FeedbackSource* receiver,
   bool recover_okay = false;
   const bool retargeting = chat_runtime &&
       retarget_tracker->cancellation_requested();
-  if (okay && !gate_failure && !retargeting) {
+  if (okay && !gate_failure && !recovered_contact_miss && !retargeting) {
     hold_okay = RunPawLiftSegment(
         "anger_assertive_hold", first_leg, 0.0, 0.0,
         current_shift_x, 0.0, current_shift_y, 0.0,
@@ -1545,7 +1613,8 @@ bool RunAngerStompTest(Sender* sender, FeedbackSource* receiver,
   }
   bool neutral_hold_okay = true;
   if (recover_okay && chat_runtime &&
-      retarget_tracker->cancellation_requested()) {
+      (recovered_contact_miss ||
+       retarget_tracker->cancellation_requested())) {
     neutral_hold_okay = RunPawLiftSegment(
         "anger_neutral_hold", first_leg, 0.0, 0.0,
         0.0, 0.0, 0.0, 0.0, kDiagonalSupportZ, 0.0,
@@ -1558,18 +1627,26 @@ bool RunAngerStompTest(Sender* sender, FeedbackSource* receiver,
       monitor->support_count() == 4;
   const bool transition_complete = chat_runtime &&
       retarget_tracker->cancellation_requested();
-  status->active = chat_runtime && !transition_complete ? "anger" : "neutral";
-  status->phase = transition_complete
-      ? "anger_external_neutral_complete" : "anger_test_complete";
+  const bool neutral_transition = recovered_contact_miss || transition_complete;
+  status->active = chat_runtime && !neutral_transition ? "anger" : "neutral";
+  status->active_profile = chat_runtime && !neutral_transition
+      ? "anger_canonical_paw_placements" : "neutral_animal_breath";
+  status->phase = recovered_contact_miss
+      ? "anger_contact_miss_recovered"
+      : (transition_complete
+          ? "anger_external_neutral_complete" : "anger_test_complete");
   status->estimated_contact_motion_gate_enabled = false;
   if (!four_feet_recovered && status->last_fault.empty() &&
       !g_safety_fault.load()) {
     status->last_fault = "anger exact recovery did not restore four-foot support";
   }
   PublishExpressionStatus(status_writer, *status);
-  return okay && !gate_failure && hold_okay && recover_okay &&
-      neutral_hold_okay &&
-      four_feet_recovered;
+  if (!okay || gate_failure || !hold_okay || !recover_okay ||
+      !neutral_hold_okay || !four_feet_recovered) {
+    return AngerRunResult::kFatal;
+  }
+  return recovered_contact_miss
+      ? AngerRunResult::kRecoveredContactMiss : AngerRunResult::kComplete;
 }
 
 bool RunSadnessBodyVisualTest(Sender* sender, FeedbackSource* receiver,
@@ -2218,6 +2295,7 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
   uint32_t recovery_last_tick = 0;
   int recovery_samples = 0;
   uint64_t last_transport_sequence = 0;
+  EmotionStateSequenceGate state_sequence_gate;
   uint64_t joy_profile_cycle = 0;
   bool joy_runtime_active = false;
   uint64_t anger_profile_cycle = 0;
@@ -2250,12 +2328,17 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
     const EmotionState emotion = emotion_source->GetState();
     status->link_age = emotion.age_seconds;
     if (!stale_latched && emotion.valid &&
-        emotion.age_seconds <= kEmotionTimeoutSeconds &&
-        emotion.transport_sequence != last_transport_sequence) {
-      last_transport_sequence = emotion.transport_sequence;
-      engine.Request(emotion.emotion, emotion.valence, emotion.arousal,
-                     trajectory_time);
-      UpdateRequestedStatus(status, emotion, commissioned);
+        emotion.age_seconds <= kEmotionTimeoutSeconds) {
+      if (emotion.transport_sequence != last_transport_sequence) {
+        last_transport_sequence = emotion.transport_sequence;
+        UpdateRequestedStatus(status, emotion, commissioned);
+      }
+      if (state_sequence_gate.Accept(
+              emotion.session_id, emotion.state_sequence)) {
+        engine.Request(emotion.emotion, emotion.valence, emotion.arousal,
+                       trajectory_time);
+        UpdateRequestedStatus(status, emotion, commissioned);
+      }
     }
     if (!stale_latched &&
         (!emotion.valid || emotion.age_seconds > kEmotionTimeoutSeconds)) {
@@ -2338,7 +2421,7 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
           const uint64_t action_start_sequence = last_transport_sequence;
           EmotionRetargetTracker retarget("joy", action_start_sequence);
           const double runtime_lift = std::max(0.003, 0.050 * profile_scale);
-          const bool joy_okay = RunJoyPawTest(
+          const JoyRunResult joy_result = RunJoyPawTest(
               sender, receiver, robot_state, command, pause_stats,
               foot_load_monitor, stop_source, status_writer, status,
               runtime_lift, true, &retarget, emotion_source, &commissioned);
@@ -2347,7 +2430,7 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
           last_trajectory_tick = after_action;
           next = after_action;
           hold_command = *command;
-          if (!joy_okay) return false;
+          if (joy_result == JoyRunResult::kFatal) return false;
 
           if (retarget.cancellation_requested()) {
             joy_runtime_active = false;
@@ -2370,7 +2453,15 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
                 retarget.emotion(), retarget.valence(), retarget.arousal(),
                 trajectory_time);
           } else {
-            if (retarget.last_sequence() != action_start_sequence) {
+            // Joy is a persistent physical profile, just like the planted
+            // categories. Successful cycles repeat while Joy remains current.
+            // A safely recovered unload miss has already completed canonical
+            // Neutral and its hold, so re-enter Joy without releasing the SDK.
+            if (joy_result == JoyRunResult::kRecoveredContactMiss) {
+              engine.CompleteExternalNeutralTransition(
+                  "joy", retarget.valence(), retarget.arousal(),
+                  trajectory_time);
+            } else if (retarget.last_sequence() != action_start_sequence) {
               engine.Request("joy", retarget.valence(), retarget.arousal(),
                              trajectory_time);
             }
@@ -2404,7 +2495,7 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
           AngerRetargetTracker retarget(action_start_sequence);
           const double runtime_lift = std::max(
               0.010, kAngerLiftMeters * profile_scale);
-          const bool anger_okay = RunAngerStompTest(
+          const AngerRunResult anger_result = RunAngerStompTest(
               sender, receiver, robot_state, command, pause_stats,
               foot_load_monitor, stop_source, status_writer, status,
               runtime_lift, static_cast<int>(anger_profile_cycle % 2), true,
@@ -2414,7 +2505,7 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
           last_trajectory_tick = after_action;
           next = after_action;
           hold_command = *command;
-          if (!anger_okay) return false;
+          if (anger_result == AngerRunResult::kFatal) return false;
 
           if (retarget.cancellation_requested()) {
             anger_runtime_active = false;
@@ -2437,7 +2528,14 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
                 retarget.emotion(), retarget.valence(), retarget.arousal(),
                 trajectory_time);
           } else {
-            if (retarget.last_sequence() != action_start_sequence) {
+            // A safely recovered unload miss has already completed canonical
+            // Neutral and its hold. Resume persistent Anger without releasing
+            // MotionSDK ownership; successful cycles continue as before.
+            if (anger_result == AngerRunResult::kRecoveredContactMiss) {
+              engine.CompleteExternalNeutralTransition(
+                  "anger", retarget.valence(), retarget.arousal(),
+                  trajectory_time);
+            } else if (retarget.last_sequence() != action_start_sequence) {
               engine.Request("anger", retarget.valence(), retarget.arousal(),
                              trajectory_time);
             }
@@ -3025,7 +3123,7 @@ int main(int argc, char** argv) {
         okay = RunJoyPawTest(
             &sender, &receiver, &robot_state, &command, &pause_stats,
             &foot_load_monitor, &stop_source, &status_writer, &status,
-            paw_lift_meters, joy_suite_test);
+            paw_lift_meters, joy_suite_test) == JoyRunResult::kComplete;
       }
     } else if (anger_stomp_test) {
       okay = RunNeutralTestWindow(
@@ -3035,10 +3133,11 @@ int main(int argc, char** argv) {
         for (int cycle = 1; okay && cycle <= anger_suite_cycles; ++cycle) {
           std::cout << "ANGER_SUITE_CYCLE cycle=" << cycle
                     << " total=" << anger_suite_cycles << std::endl;
-          okay = RunAngerStompTest(
+          const AngerRunResult anger_result = RunAngerStompTest(
               &sender, &receiver, &robot_state, &command, &pause_stats,
               &foot_load_monitor, &stop_source, &status_writer, &status,
               anger_lift_meters, anger_first_leg, anger_suite_test);
+          okay = anger_result == AngerRunResult::kComplete;
         }
       }
     } else if (sadness_body_visual_test) {
