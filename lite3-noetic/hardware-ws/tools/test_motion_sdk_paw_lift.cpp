@@ -45,24 +45,25 @@ int main() {
     assert(Near(nominal.hip_y, stand_hip, 1e-12));
     assert(Near(nominal.knee, stand_knee, 1e-12));
   }
-  // A 20 mm rear/side body transfer plus 50 mm FL lift remains inside the
-  // explicitly bounded joint workspace and produces finite velocities.
+  // A 30 mm rear and 20 mm side body transfer plus 50 mm FL lift remains
+  // inside the explicitly bounded joint workspace and produces finite
+  // velocities.
   const CartesianLegJointTarget shifted_fl = SampleLite3CartesianLeg(
-      0.0, stand_hip, stand_knee, 0, 0.020, -0.020, 0.050,
-      0.020, -0.020, 0.050);
+      0.0, stand_hip, stand_knee, 0, 0.030, -0.020, 0.050,
+      0.030, -0.020, 0.050);
   assert(shifted_fl.valid);
   assert(std::abs(shifted_fl.hip_x) < 0.10);
   assert(std::abs(shifted_fl.hip_y - stand_hip) < 0.30);
   assert(std::abs(shifted_fl.knee - stand_knee) < 0.50);
   const CartesianLegJointTarget loaded_hr = SampleLite3CartesianLeg(
-      0.0, stand_hip, stand_knee, 3, 0.020, -0.020, -0.020,
-      0.020, -0.020, -0.020);
+      0.0, stand_hip, stand_knee, 3, 0.030, -0.020, -0.030,
+      0.030, -0.020, -0.030);
   assert(loaded_hr.valid);
   assert(std::abs(loaded_hr.hip_x) < 0.10);
   assert(std::abs(loaded_hr.hip_y - stand_hip) < 0.30);
   assert(std::abs(loaded_hr.knee - stand_knee) < 0.50);
   const CartesianLegJointTarget suite_midpoint = SampleLite3CartesianLeg(
-      0.0, stand_hip, stand_knee, 0, 0.020, -0.020, 0.025,
+      0.0, stand_hip, stand_knee, 0, 0.030, -0.020, 0.025,
       0.0, 0.0, 1.875 * 0.050 / 0.60);
   assert(suite_midpoint.valid);
   assert(std::abs(suite_midpoint.hip_x_velocity) < 2.0);

@@ -226,18 +226,25 @@ make -C lite3-noetic run-emotion-hardware
 make -C lite3-noetic run-emotion-chat
 ```
 
-Inspect the runner without commanding it from ROS:
+Inspect the runner from an optional third terminal without commanding it:
 
 ```bash
-ssh -J ysc@192.168.2.1 ysc@192.168.1.103 \
-  'source /opt/ros/noetic/setup.bash; source ~/emotion_bot_lite3_hw_ws/devel/setup.bash; rostopic echo /emotion_bot/hardware/expression_status'
+make -C lite3-noetic watch-emotion-hardware-status
 ```
+
+Each JSON sample correlates the chat `session_id`, `turn_id`, transport and
+state sequences, valence/arousal, engine-requested category, resolved and active
+physical profiles, newest pending request, phase/cycle, fallback reason, link
+age, ownership, contact estimate, fault, and release state. A neutral fallback
+does not rewrite the requested EmotionEngine category.
 
 The default allowlist is only `neutral`. During separately authorized staged
 commissioning, add only already approved categories and choose the requested
 scale explicitly, for example
-`HARDWARE_COMMISSIONED_EMOTIONS=neutral,affection HARDWARE_EXPRESSION_SCALE=0.25`.
-Do not enable a category merely because its offline tests pass.
+`HARDWARE_COMMISSIONED_EMOTIONS=neutral,joy HARDWARE_EXPRESSION_SCALE=1.0`.
+Do not enable a category merely because its offline tests pass. Affection,
+Curiosity, Disgust, and Surprise always resolve to the accepted Neutral breath
+until their own final physical reactions are implemented and accepted.
 
 Press `Ctrl+C` in terminal 1 to enter the normal SDK release path. A stale chat
 link first returns to neutral for 1.5 seconds and holds for 0.35 seconds, then

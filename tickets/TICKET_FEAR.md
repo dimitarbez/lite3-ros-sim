@@ -5,11 +5,13 @@
 [Previous: Disgust](TICKET_DISGUST.md) ·
 [Next: Surprise](TICKET_SURPRISE.md)
 
-## Status — implemented and operator-accepted; normal chat integration pending
+## Status — accepted and validated through normal physical state and retarget
 
 The final all-feet-planted Fear animation is implemented, completed its bounded
 physical run, and was visually verified by the operator as working correctly on
-the robot. Normal chat selection and retargeting remain pending.
+the robot. The continuous runner now selects that planted animation. Normal
+physical selection, repeated looping, Fear-to-Neutral, and Fear-to-Anger
+retargeting passed on 2026-09-20 under uninterrupted ownership.
 
 A separate contact-gated paw-hover candidate, explicit commissioning modes, normal
 state selection, newest-request retargeting, and deterministic bounds/tests are
@@ -106,8 +108,8 @@ without restarting recovery. STOP and faults remain immediate.
 - [x] Complete a bounded physical Fear run with state, IMU, joints, contact,
   STOP, tracking, feedback, and release evidence.
 - [x] Obtain operator acceptance as fear, distinct from sadness and surprise.
-- [ ] Select the accepted Fear animation through normal validated `fear` state
-  and live-test retargeting before changing the allowlist, as tracked by the
+- [x] Select the accepted Fear animation through normal validated `fear` state.
+- [x] Live-test normal selection and retargeting, as tracked by the
   [chat-driven physical emotion integration ticket](TICKET_PHYSICAL_EMOTION_CHAT.md).
 
 ## Acceptance criteria
@@ -142,13 +144,32 @@ without restarting recovery. STOP and faults remain immediate.
 - Explicit commissioning controls are `HARDWARE_FEAR_SINGLE_HOVER_TEST`,
   `HARDWARE_FEAR_SUITE_TEST`, `HARDWARE_FEAR_FIRST_PAW=left|right`, and
   `HARDWARE_FEAR_LIFT_METERS=0.015..0.025`. Fear remains excluded from the
-  checked-in normal allowlist until normal chat selection and retargeting pass.
+  checked-in normal allowlist until the complete nine-category integration
+  sweep and consolidated operator verdict pass.
 - `HARDWARE_FEAR_BODY_VISUAL_TEST=true` is a separate 15-second diagnostic:
   three exact five-second cycles with all paws planted. Each cycle uses the
   bounded flinch/recoil/crouch envelope, five 0.45-second 8 mm lateral cower
   transitions, a 0.70-second freeze, and 1.15-second exact recovery. It never
   enables or substitutes for the paw-unload path. This is the physically and
   visually accepted Fear animation.
+
+## Normal chat integration evidence — 2026-09-20
+
+The normal validated Fear state selected the accepted all-feet-planted profile
+and completed two full five-second loops with four supports. A Neutral request
+during a later loop completed the 1.5-second canonical return and 0.35-second
+exact hold without releasing MotionSDK. In a subsequent continuous session,
+Fear retargeted to Anger through the same validated chat-input,
+`EmotionEngine`, state-uplink, and robot-side resolver path. The runner started
+Anger only after the Fear recovery and exact-neutral hold; no obsolete Fear
+phase restarted.
+
+A final independent run also entered Fear from an active Sadness loop only
+after Sadness's 1.5-second canonical recovery and 0.35-second exact-neutral
+hold. A subsequent Neutral request completed Fear's own 1.5 + 0.35-second
+recovery with four supports and no fault. Shutdown released the SDK cleanly;
+fresh state/gait/motion was `1/0/0`, errors zero, STOP false, and no runner or
+ownership marker remained.
 
 ## Non-goals
 

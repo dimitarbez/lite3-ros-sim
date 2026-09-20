@@ -97,7 +97,9 @@ int main() {
   fear_engine.CompleteExternalNeutralTransition(
       fear_retarget.emotion(), fear_retarget.valence(),
       fear_retarget.arousal(), 20.0);
-  assert(fear_engine.active() == "surprise");
+  assert(fear_engine.requested() == "surprise");
+  assert(fear_engine.active() == "neutral");
+  assert(fear_engine.requested_resolution().fallback);
   assert(fear_engine.pending().empty());
 
   // Sadness also owns a lifted paw. Same-category updates wait for the next
@@ -122,8 +124,29 @@ int main() {
   sadness_engine.CompleteExternalNeutralTransition(
       sadness_retarget.emotion(), sadness_retarget.valence(),
       sadness_retarget.arousal(), 30.0);
-  assert(sadness_engine.active() == "curiosity");
+  assert(sadness_engine.requested() == "curiosity");
+  assert(sadness_engine.active() == "neutral");
+  assert(sadness_engine.requested_resolution().fallback);
   assert(sadness_engine.pending().empty());
+
+  // Joy's accepted alternating-paw runtime uses the generic lower-first latch.
+  // A mid-left or mid-right request suppresses all later phases and keeps only
+  // the newest request for handoff after canonical return and hold.
+  for (int raised_paw = 0; raised_paw < 2; ++raised_paw) {
+    (void)raised_paw;
+    EmotionRetargetTracker joy_retarget("joy", 400);
+    joy_retarget.Observe(true, true, 401, "fear", -0.8, 0.9);
+    assert(joy_retarget.cancellation_requested());
+    assert(!joy_retarget.may_start_next_phase());
+    joy_retarget.Observe(true, true, 402, "affection", 0.8, 0.4);
+    assert(joy_retarget.emotion() == "affection");
+    ExpressionEngine joy_engine({"neutral", "joy", "fear"});
+    joy_engine.CompleteExternalNeutralTransition(
+        joy_retarget.emotion(), joy_retarget.valence(),
+        joy_retarget.arousal(), 40.0);
+    assert(joy_engine.requested() == "affection");
+    assert(joy_engine.active() == "neutral");
+  }
 
   // The official owner is the only fake sender instantiated in this harness;
   // Retroid and legacy action senders have no execution path here.

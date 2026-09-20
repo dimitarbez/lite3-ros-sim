@@ -329,10 +329,22 @@ class StopSource {
 
 struct ExpressionStatus {
   std::string requested{"neutral"};
+  std::string resolved{"neutral"};
+  std::string resolved_profile{"neutral_animal_breath"};
   std::string active{"neutral"};
+  std::string active_profile{"neutral_animal_breath"};
+  bool fallback{false};
+  std::string fallback_reason;
   std::string phase{"preflight"};
   uint64_t profile_cycle{0};
   std::string pending;
+  std::string pending_profile;
+  uint64_t transport_sequence{0};
+  uint64_t state_sequence{0};
+  std::string session_id;
+  std::string turn_id;
+  double valence{0.0};
+  double arousal{0.2};
   double link_age{INFINITY};
   bool ownership{false};
   bool feedback_paused{false};
@@ -352,12 +364,34 @@ void PublishExpressionStatus(SequenceRecordWriter* writer,
   std::ostringstream value;
   value << "{\"schema_version\":\"1.0\""
         << ",\"requested_emotion\":\"" << JsonEscape(status.requested) << "\""
+        << ",\"resolved_emotion\":\"" << JsonEscape(status.resolved) << "\""
+        << ",\"resolved_profile\":\""
+        << JsonEscape(status.resolved_profile) << "\""
         << ",\"active_emotion\":\"" << JsonEscape(status.active) << "\""
+        << ",\"active_profile\":\"" << JsonEscape(status.active_profile)
+        << "\""
+        << ",\"fallback_active\":" << (status.fallback ? "true" : "false")
+        << ",\"fallback_reason\":";
+  if (status.fallback_reason.empty()) value << "null";
+  else value << "\"" << JsonEscape(status.fallback_reason) << "\"";
+  value << ",\"transport_sequence\":" << status.transport_sequence
+        << ",\"state_sequence\":" << status.state_sequence
+        << ",\"session_id\":";
+  if (status.session_id.empty()) value << "null";
+  else value << "\"" << JsonEscape(status.session_id) << "\"";
+  value << ",\"turn_id\":";
+  if (status.turn_id.empty()) value << "null";
+  else value << "\"" << JsonEscape(status.turn_id) << "\"";
+  value << ",\"valence\":" << status.valence
+        << ",\"arousal\":" << status.arousal
         << ",\"phase\":\"" << JsonEscape(status.phase) << "\""
         << ",\"profile_cycle\":" << status.profile_cycle
         << ",\"pending_emotion\":";
   if (status.pending.empty()) value << "null";
   else value << "\"" << JsonEscape(status.pending) << "\"";
+  value << ",\"pending_profile\":";
+  if (status.pending_profile.empty()) value << "null";
+  else value << "\"" << JsonEscape(status.pending_profile) << "\"";
   value << ",\"link_age\":";
   if (std::isfinite(status.link_age)) value << status.link_age;
   else value << "null";
@@ -389,6 +423,45 @@ void PublishExpressionStatus(SequenceRecordWriter* writer,
   value << "]}"
         << ",\"release_state\":\"" << JsonEscape(status.release_state) << "\"}";
   writer->Write(value.str());
+}
+
+void UpdateRequestedStatus(ExpressionStatus* status,
+                           const EmotionState& emotion,
+                           const std::set<std::string>& commissioned) {
+  if (!emotion.valid) return;
+  const PhysicalProfileResolution resolution =
+      ResolvePhysicalProfile(emotion.emotion, commissioned);
+  status->requested = emotion.emotion;
+  status->resolved = resolution.resolved_emotion;
+  status->resolved_profile = resolution.profile;
+  status->fallback = resolution.fallback;
+  status->fallback_reason = resolution.fallback_reason;
+  status->transport_sequence = emotion.transport_sequence;
+  status->state_sequence = emotion.state_sequence;
+  status->session_id = emotion.session_id;
+  status->turn_id = emotion.turn_id;
+  status->valence = emotion.valence;
+  status->arousal = emotion.arousal;
+}
+
+void UpdateEngineStatus(ExpressionStatus* status,
+                        const ExpressionEngine& engine) {
+  const PhysicalProfileResolution requested = engine.requested_resolution();
+  const PhysicalProfileResolution active = engine.active_resolution();
+  status->requested = engine.requested();
+  status->resolved = requested.resolved_emotion;
+  status->resolved_profile = requested.profile;
+  status->fallback = requested.fallback;
+  status->fallback_reason = requested.fallback_reason;
+  status->active = engine.active();
+  status->active_profile = active.profile;
+  status->phase = engine.phase();
+  status->profile_cycle = engine.profile_cycle();
+  status->pending = engine.pending_requested();
+  status->pending_profile = engine.pending().empty()
+      ? "" : engine.pending_resolution().profile;
+  status->valence = engine.valence();
+  status->arousal = engine.arousal();
 }
 
 bool RobotSafetyHealthy(RobotStateSource* source, const std::string& phase) {
@@ -894,9 +967,21 @@ bool RunFearBodyVisualTest(Sender* sender, FeedbackSource* receiver,
                            FeedbackPauseStats* pause_stats,
                            FootLoadMonitor* monitor, StopSource* stop_source,
                            SequenceRecordWriter* status_writer,
-                           ExpressionStatus* status) {
+                           ExpressionStatus* status,
+                           int cycle_count = kFearBodyVisualCycles,
+                           EmotionRetargetTracker* retarget_tracker = nullptr,
+                           EmotionSource* emotion_source = nullptr,
+                           const std::set<std::string>* commissioned = nullptr) {
+  const bool chat_runtime = retarget_tracker != nullptr &&
+      emotion_source != nullptr && commissioned != nullptr;
+  if ((retarget_tracker != nullptr || emotion_source != nullptr ||
+       commissioned != nullptr) && !chat_runtime) {
+    status->last_fault = "incomplete fear body chat-retarget configuration";
+    return false;
+  }
   if (!FearBodyVisualLimitsValid() || !monitor->baseline_valid() ||
-      monitor->support_count() != 4) {
+      monitor->support_count() != 4 || cycle_count < 1 ||
+      cycle_count > kFearBodyVisualCycles) {
     status->last_fault =
         "fear body visual requires valid bounds and four-foot baseline";
     return false;
@@ -904,80 +989,146 @@ bool RunFearBodyVisualTest(Sender* sender, FeedbackSource* receiver,
 
   status->requested = "fear";
   status->active = "fear";
+  status->active_profile = "fear_planted_flinch_cower";
   status->estimated_contact_motion_gate_enabled = true;
   PublishExpressionStatus(status_writer, *status);
 
+  const std::function<void()> observe_request = [&]() {
+    if (!chat_runtime) return;
+    const EmotionState observed = emotion_source->GetState();
+    retarget_tracker->Observe(
+        observed.valid, observed.age_seconds <= kEmotionTimeoutSeconds,
+        observed.transport_sequence, observed.emotion,
+        observed.valence, observed.arousal);
+    status->link_age = observed.age_seconds;
+    UpdateRequestedStatus(status, observed, *commissioned);
+    status->pending = retarget_tracker->cancellation_requested()
+        ? retarget_tracker->emotion() : "";
+    status->pending_profile = status->pending.empty() ? "" :
+        ResolvePhysicalProfile(status->pending, *commissioned).profile;
+  };
+  observe_request();
+
   bool okay = true;
-  for (int cycle = 1; okay && cycle <= kFearBodyVisualCycles; ++cycle) {
+  for (int cycle = 1; okay && cycle <= cycle_count; ++cycle) {
     status->profile_cycle = static_cast<uint64_t>(cycle);
     std::cout << "FEAR_BODY_VISUAL_CYCLE cycle=" << cycle
-              << " total=" << kFearBodyVisualCycles << std::endl;
+              << " total=" << cycle_count << std::endl;
     const std::string prefix = "fear_body_" + std::to_string(cycle) + "_";
+    double current_shift_x = 0.0;
+    double current_shift_y = 0.0;
+    double current_common_z = 0.0;
+    double current_stance_y = 0.0;
     okay = RunPawLiftSegment(
         prefix + "flinch", 0, 0.0, 0.0,
         0.0, 0.0, 0.0, 0.0, 0.0, 0.0, kFearFlinchSeconds,
         sender, receiver, robot_state, command, pause_stats, monitor,
         stop_source, status, status_writer,
-        0.0, kFearFlinchMeters, 0.0, kFearStanceMeters);
+        0.0, kFearFlinchMeters, 0.0, kFearStanceMeters,
+        observe_request);
     if (okay) {
+      current_common_z = kFearFlinchMeters;
+      current_stance_y = kFearStanceMeters;
+    }
+    if (okay &&
+        (!chat_runtime || retarget_tracker->may_start_next_phase())) {
       okay = RunPawLiftSegment(
           prefix + "recoil", 0, 0.0, 0.0,
           0.0, kFearRecoilXMeters, 0.0, 0.0, 0.0, 0.0,
           kFearRecoilSeconds, sender, receiver, robot_state, command,
           pause_stats, monitor, stop_source, status, status_writer,
           kFearFlinchMeters, kFearGuardedCrouchMeters,
-          kFearStanceMeters, kFearStanceMeters);
+          kFearStanceMeters, kFearStanceMeters, observe_request);
+      if (okay) {
+        current_shift_x = kFearRecoilXMeters;
+        current_common_z = kFearGuardedCrouchMeters;
+      }
     }
 
     const std::array<double, kFearBodyTrembleSegments> tremble_targets{{
         -kFearBodyTrembleMeters, kFearBodyTrembleMeters,
         -kFearBodyTrembleMeters, kFearBodyTrembleMeters, 0.0}};
-    double start_y = 0.0;
     for (int segment = 0;
-         okay && segment < kFearBodyTrembleSegments; ++segment) {
+         okay && segment < kFearBodyTrembleSegments &&
+         (!chat_runtime || retarget_tracker->may_start_next_phase());
+         ++segment) {
       const double end_y = tremble_targets[segment];
       okay = RunPawLiftSegment(
           prefix + "cower_" + std::to_string(segment + 1),
           0, 0.0, 0.0,
-          kFearRecoilXMeters, kFearRecoilXMeters, start_y, end_y,
+          current_shift_x, current_shift_x, current_shift_y, end_y,
           0.0, 0.0, kFearBodyTrembleSegmentSeconds,
           sender, receiver, robot_state, command, pause_stats, monitor,
           stop_source, status, status_writer,
-          kFearGuardedCrouchMeters, kFearGuardedCrouchMeters,
-          kFearStanceMeters, kFearStanceMeters);
-      start_y = end_y;
+          current_common_z, current_common_z,
+          current_stance_y, current_stance_y, observe_request);
+      if (okay) current_shift_y = end_y;
     }
-    if (okay) {
+    if (okay &&
+        (!chat_runtime || retarget_tracker->may_start_next_phase())) {
       okay = RunPawLiftSegment(
           prefix + "freeze", 0, 0.0, 0.0,
-          kFearRecoilXMeters, kFearRecoilXMeters, 0.0, 0.0,
+          current_shift_x, current_shift_x,
+          current_shift_y, current_shift_y,
           0.0, 0.0, kFearBodyFreezeSeconds,
           sender, receiver, robot_state, command, pause_stats, monitor,
           stop_source, status, status_writer,
-          kFearGuardedCrouchMeters, kFearGuardedCrouchMeters,
-          kFearStanceMeters, kFearStanceMeters);
+          current_common_z, current_common_z,
+          current_stance_y, current_stance_y, observe_request);
     }
+    const bool retarget_before_recovery = chat_runtime &&
+        retarget_tracker->cancellation_requested();
     if (okay) {
+      const double recovery_seconds = retarget_before_recovery
+          ? ExpressionEngine::kNeutralReturnSeconds : kFearRecoverSeconds;
       okay = RunPawLiftSegment(
           prefix + "recover", 0, 0.0, 0.0,
-          kFearRecoilXMeters, 0.0, 0.0, 0.0,
-          0.0, 0.0, kFearRecoverSeconds,
+          current_shift_x, 0.0, current_shift_y, 0.0,
+          0.0, 0.0, recovery_seconds,
           sender, receiver, robot_state, command, pause_stats, monitor,
           stop_source, status, status_writer,
-          kFearGuardedCrouchMeters, 0.0, kFearStanceMeters, 0.0);
+          current_common_z, 0.0, current_stance_y, 0.0,
+          observe_request);
+    }
+    if (okay && chat_runtime &&
+        retarget_tracker->cancellation_requested() &&
+        !retarget_before_recovery) {
+      okay = RunPawLiftSegment(
+          prefix + "retarget_neutral_return", 0, 0.0, 0.0,
+          0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+          ExpressionEngine::kNeutralReturnSeconds,
+          sender, receiver, robot_state, command, pause_stats, monitor,
+          stop_source, status, status_writer, 0.0, 0.0, 0.0, 0.0,
+          observe_request);
     }
     if (okay && monitor->support_count() != 4) {
       status->last_fault =
           "fear body visual cycle did not recover four supports";
       okay = false;
     }
+    if (chat_runtime && retarget_tracker->cancellation_requested()) break;
+  }
+
+  bool neutral_hold_okay = true;
+  if (okay && chat_runtime && retarget_tracker->cancellation_requested()) {
+    neutral_hold_okay = RunPawLiftSegment(
+        "fear_body_neutral_hold", 0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        ExpressionEngine::kNeutralHoldSeconds,
+        sender, receiver, robot_state, command, pause_stats, monitor,
+        stop_source, status, status_writer, 0.0, 0.0, 0.0, 0.0,
+        observe_request);
   }
 
   status->active = "neutral";
-  status->phase = okay ? "fear_body_visual_complete" : status->phase;
+  status->active_profile = "neutral_animal_breath";
+  status->phase = okay && neutral_hold_okay
+      ? (chat_runtime && retarget_tracker->cancellation_requested()
+          ? "fear_external_neutral_complete" : "fear_body_visual_complete")
+      : status->phase;
   status->estimated_contact_motion_gate_enabled = false;
   PublishExpressionStatus(status_writer, *status);
-  return okay;
+  return okay && neutral_hold_okay;
 }
 
 bool RunNeutralTestWindow(Sender* sender, FeedbackSource* receiver,
@@ -1017,8 +1168,18 @@ bool RunJoyPawTest(Sender* sender, FeedbackSource* receiver,
                    FeedbackPauseStats* pause_stats, FootLoadMonitor* monitor,
                    StopSource* stop_source, SequenceRecordWriter* status_writer,
                    ExpressionStatus* status, double test_lift,
-                   bool five_second_suite = false) {
+                   bool five_second_suite = false,
+                   EmotionRetargetTracker* retarget_tracker = nullptr,
+                   EmotionSource* emotion_source = nullptr,
+                   const std::set<std::string>* commissioned = nullptr) {
   constexpr double kDiagonalSupportZ = 0.0;
+  const bool chat_runtime = retarget_tracker != nullptr &&
+      emotion_source != nullptr && commissioned != nullptr;
+  if ((retarget_tracker != nullptr || emotion_source != nullptr ||
+       commissioned != nullptr) && !chat_runtime) {
+    status->last_fault = "incomplete joy chat-retarget configuration";
+    return false;
+  }
   const double transfer_seconds = five_second_suite ? 0.50 : 1.00;
   const double lift_seconds = five_second_suite ? 0.60 : 1.00;
   const double hold_seconds = five_second_suite ? 0.30 : 0.75;
@@ -1030,66 +1191,111 @@ bool RunJoyPawTest(Sender* sender, FeedbackSource* receiver,
   }
   status->requested = "joy";
   status->active = "joy";
+  status->active_profile = "joy_alternating_front_paws_50mm";
   status->estimated_contact_motion_gate_enabled = true;
   PublishExpressionStatus(status_writer, *status);
 
+  const std::function<void()> observe_request = [&]() {
+    if (!chat_runtime) return;
+    const EmotionState observed = emotion_source->GetState();
+    retarget_tracker->Observe(
+        observed.valid, observed.age_seconds <= kEmotionTimeoutSeconds,
+        observed.transport_sequence, observed.emotion,
+        observed.valence, observed.arousal);
+    status->link_age = observed.age_seconds;
+    UpdateRequestedStatus(status, observed, *commissioned);
+    status->pending = retarget_tracker->cancellation_requested()
+        ? retarget_tracker->emotion() : "";
+    status->pending_profile = status->pending.empty() ? "" :
+        ResolvePhysicalProfile(status->pending, *commissioned).profile;
+  };
+  observe_request();
+
   for (int leg = 0; leg < 2; ++leg) {
+    if (chat_runtime && !retarget_tracker->may_start_next_phase()) break;
     const std::string side = leg == 0 ? "front_left" : "front_right";
     // The commissioned robot carries more residual load on the front-right
     // paw for a symmetric 20 mm rearward transfer. The 2026-09-20 suite left
-    // 7.3 N on that paw, while the left unloaded to 0.72 N. A larger lateral
-    // shift did not improve it, so preserve lateral symmetry and move only the
-    // right-side body transfer farther rearward.
-    const double support_shift_x = leg == 0 ? 0.020 : 0.035;
+    // 7.3 N on that paw, while the left unloaded to 0.72 N. The first normal
+    // chat run later left 8.582 N on the front-left paw with the same 20 mm
+    // transfer. A 25 mm retry passed one full loop but retained 8.017 N on the
+    // second left lift. Preserve the accepted 50 mm lift and lateral symmetry,
+    // but use a bounded 30 mm left transfer for repeat margin; the right stays
+    // at its already accepted 35 mm transfer.
+    const double support_shift_x = leg == 0 ? 0.030 : 0.035;
     const double support_shift_y = leg == 0 ? -0.020 : 0.020;
     bool okay = RunPawLiftSegment(
         "paw_load_transfer_" + side, leg, 0.0, 0.0,
         0.0, support_shift_x, 0.0, support_shift_y,
         0.0, kDiagonalSupportZ, transfer_seconds,
         sender, receiver, robot_state, command, pause_stats, monitor,
-        stop_source, status, status_writer);
-    if (okay) {
+        stop_source, status, status_writer, 0.0, 0.0, 0.0, 0.0,
+        observe_request);
+    bool lift_started = okay &&
+        (!chat_runtime || retarget_tracker->may_start_next_phase());
+    if (lift_started) {
       okay = RunPawLiftSegment(
           "paw_lift_" + side, leg, 0.0, test_lift,
           support_shift_x, support_shift_x,
           support_shift_y, support_shift_y,
           kDiagonalSupportZ, kDiagonalSupportZ, lift_seconds,
           sender, receiver, robot_state, command, pause_stats, monitor,
-          stop_source, status, status_writer);
+          stop_source, status, status_writer, 0.0, 0.0, 0.0, 0.0,
+          observe_request);
     }
-    if (okay) {
+    if (okay && lift_started &&
+        (!chat_runtime || !retarget_tracker->cancellation_requested())) {
       okay = RunPawLiftSegment(
           "paw_hold_" + side, leg, test_lift, test_lift,
           support_shift_x, support_shift_x,
           support_shift_y, support_shift_y,
           kDiagonalSupportZ, kDiagonalSupportZ, hold_seconds,
           sender, receiver, robot_state, command, pause_stats, monitor,
-          stop_source, status, status_writer);
+          stop_source, status, status_writer, 0.0, 0.0, 0.0, 0.0,
+          observe_request);
     }
-    const bool unload_confirmed = okay && !monitor->loaded(leg) &&
-        OtherPawSupportsValid(*monitor, leg);
+    const bool unload_confirmed = !lift_started ||
+        (okay && !monitor->loaded(leg) &&
+         OtherPawSupportsValid(*monitor, leg));
     std::cout << "PAW_UNLOAD side=" << side
               << " confirmed=" << (unload_confirmed ? "true" : "false")
               << " force_n=" << monitor->filtered()[leg]
               << " support_count=" << monitor->support_count() << std::endl;
 
     // A missed unload still lowers the paw before the test reports failure.
-    if (okay) {
+    if (okay && lift_started) {
       okay = RunPawLiftSegment(
           "paw_lower_" + side, leg, test_lift, 0.0,
           support_shift_x, support_shift_x,
           support_shift_y, support_shift_y,
           kDiagonalSupportZ, kDiagonalSupportZ, lower_seconds,
           sender, receiver, robot_state, command, pause_stats, monitor,
-          stop_source, status, status_writer);
+          stop_source, status, status_writer, 0.0, 0.0, 0.0, 0.0,
+          observe_request);
     }
+    const bool retarget_before_settle = chat_runtime &&
+        retarget_tracker->cancellation_requested();
     if (okay) {
+      const double return_seconds = retarget_before_settle
+          ? ExpressionEngine::kNeutralReturnSeconds : settle_seconds;
       okay = RunPawLiftSegment(
           "paw_settle_" + side, leg, 0.0, 0.0,
           support_shift_x, 0.0, support_shift_y, 0.0,
-          kDiagonalSupportZ, 0.0, settle_seconds,
+          kDiagonalSupportZ, 0.0, return_seconds,
           sender, receiver, robot_state, command, pause_stats, monitor,
-          stop_source, status, status_writer);
+          stop_source, status, status_writer, 0.0, 0.0, 0.0, 0.0,
+          observe_request);
+    }
+    if (okay && chat_runtime &&
+        retarget_tracker->cancellation_requested() &&
+        !retarget_before_settle) {
+      okay = RunPawLiftSegment(
+          "joy_retarget_neutral_return", leg, 0.0, 0.0,
+          0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+          ExpressionEngine::kNeutralReturnSeconds,
+          sender, receiver, robot_state, command, pause_stats, monitor,
+          stop_source, status, status_writer, 0.0, 0.0, 0.0, 0.0,
+          observe_request);
     }
     const bool landing_confirmed = okay && monitor->loaded(leg) &&
         OtherPawSupportsValid(*monitor, leg);
@@ -1098,17 +1304,34 @@ bool RunJoyPawTest(Sender* sender, FeedbackSource* receiver,
               << " force_n=" << monitor->filtered()[leg]
               << " support_count=" << monitor->support_count() << std::endl;
     if (!okay || !unload_confirmed || !landing_confirmed) {
-      status->last_fault = "paw unload or landing confirmation failed";
+      if (status->last_fault.empty()) {
+        status->last_fault = g_safety_fault.load()
+            ? "robot safety gate aborted active paw phase"
+            : "paw unload or landing confirmation failed";
+      }
       status->estimated_contact_motion_gate_enabled = false;
       PublishExpressionStatus(status_writer, *status);
       return false;
     }
+    if (chat_runtime && retarget_tracker->cancellation_requested()) break;
+  }
+  bool neutral_hold_okay = true;
+  if (chat_runtime && retarget_tracker->cancellation_requested()) {
+    neutral_hold_okay = RunPawLiftSegment(
+        "joy_neutral_hold", 0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        ExpressionEngine::kNeutralHoldSeconds,
+        sender, receiver, robot_state, command, pause_stats, monitor,
+        stop_source, status, status_writer, 0.0, 0.0, 0.0, 0.0,
+        observe_request);
   }
   status->active = "neutral";
-  status->phase = "paw_test_complete";
+  status->active_profile = "neutral_animal_breath";
+  status->phase = chat_runtime && retarget_tracker->cancellation_requested()
+      ? "joy_external_neutral_complete" : "paw_test_complete";
   status->estimated_contact_motion_gate_enabled = false;
   PublishExpressionStatus(status_writer, *status);
-  return true;
+  return neutral_hold_okay;
 }
 
 bool RunAngerStompTest(Sender* sender, FeedbackSource* receiver,
@@ -1119,10 +1342,13 @@ bool RunAngerStompTest(Sender* sender, FeedbackSource* receiver,
                        ExpressionStatus* status, double test_lift,
                        int first_leg, bool alternating_suite,
                        AngerRetargetTracker* retarget_tracker = nullptr,
-                       EmotionSource* emotion_source = nullptr) {
+                       EmotionSource* emotion_source = nullptr,
+                       const std::set<std::string>* commissioned = nullptr) {
   constexpr double kDiagonalSupportZ = 0.0;
-  const bool chat_runtime = retarget_tracker != nullptr && emotion_source != nullptr;
-  if ((retarget_tracker == nullptr) != (emotion_source == nullptr)) {
+  const bool chat_runtime = retarget_tracker != nullptr &&
+      emotion_source != nullptr && commissioned != nullptr;
+  if ((retarget_tracker != nullptr || emotion_source != nullptr ||
+       commissioned != nullptr) && !chat_runtime) {
     status->last_fault = "incomplete anger chat-retarget configuration";
     return false;
   }
@@ -1134,6 +1360,7 @@ bool RunAngerStompTest(Sender* sender, FeedbackSource* receiver,
   }
   status->requested = "anger";
   status->active = "anger";
+  status->active_profile = "anger_canonical_paw_placements";
   status->estimated_contact_motion_gate_enabled = true;
   PublishExpressionStatus(status_writer, *status);
   const std::function<void()> observe_request = [&]() {
@@ -1144,9 +1371,11 @@ bool RunAngerStompTest(Sender* sender, FeedbackSource* receiver,
         observed.transport_sequence, observed.emotion,
         observed.valence, observed.arousal);
     status->link_age = observed.age_seconds;
-    status->requested = retarget_tracker->emotion();
+    UpdateRequestedStatus(status, observed, *commissioned);
     status->pending = retarget_tracker->cancellation_requested()
         ? retarget_tracker->emotion() : "";
+    status->pending_profile = status->pending.empty() ? "" :
+        ResolvePhysicalProfile(status->pending, *commissioned).profile;
   };
   observe_request();
   std::cout << "ANGER_TOUCHDOWN_BOUNDS lift_m=" << test_lift
@@ -1181,8 +1410,16 @@ bool RunAngerStompTest(Sender* sender, FeedbackSource* receiver,
     }
     const int leg = stomp == 0 ? first_leg : 1 - first_leg;
     const std::string side = leg == 0 ? "front_left" : "front_right";
-    const double support_shift_x = leg == 0 ? 0.020 : 0.035;
-    const double support_shift_y = leg == 0 ? -0.020 : 0.020;
+    // The original 20 mm left transfer missed repeat unload by 0.009 N in the
+    // first normal chat session. Add 5 mm of measured rearward margin without
+    // changing lift height, lateral transfer, contact thresholds, or the
+    // already accepted 35 mm right transfer.
+    const double support_shift_x = leg == 0
+        ? kAngerLeftSupportShiftXMeters
+        : kAngerRightSupportShiftXMeters;
+    const double support_shift_y = leg == 0
+        ? -kAngerSupportShiftYMeters
+        : kAngerSupportShiftYMeters;
     okay = RunPawLiftSegment(
         "anger_transfer_lift_" + side, leg, 0.0, test_lift,
         current_shift_x, support_shift_x,
@@ -1325,7 +1562,8 @@ bool RunAngerStompTest(Sender* sender, FeedbackSource* receiver,
   status->phase = transition_complete
       ? "anger_external_neutral_complete" : "anger_test_complete";
   status->estimated_contact_motion_gate_enabled = false;
-  if (!four_feet_recovered && status->last_fault.empty()) {
+  if (!four_feet_recovered && status->last_fault.empty() &&
+      !g_safety_fault.load()) {
     status->last_fault = "anger exact recovery did not restore four-foot support";
   }
   PublishExpressionStatus(status_writer, *status);
@@ -1342,8 +1580,18 @@ bool RunSadnessBodyVisualTest(Sender* sender, FeedbackSource* receiver,
                               StopSource* stop_source,
                               SequenceRecordWriter* status_writer,
                               ExpressionStatus* status,
-                              int target_leg) {
+                              int target_leg,
+                              EmotionRetargetTracker* retarget_tracker = nullptr,
+                              EmotionSource* emotion_source = nullptr,
+                              const std::set<std::string>* commissioned = nullptr) {
   constexpr double kDiagonalSupportZ = 0.0;
+  const bool chat_runtime = retarget_tracker != nullptr &&
+      emotion_source != nullptr && commissioned != nullptr;
+  if ((retarget_tracker != nullptr || emotion_source != nullptr ||
+       commissioned != nullptr) && !chat_runtime) {
+    status->last_fault = "incomplete sadness body chat-retarget configuration";
+    return false;
+  }
   if ((target_leg != 0 && target_leg != 1) ||
       !monitor->baseline_valid() || monitor->support_count() != 4 ||
       !SadnessBodyVisualLimitsValid()) {
@@ -1354,8 +1602,25 @@ bool RunSadnessBodyVisualTest(Sender* sender, FeedbackSource* receiver,
   constexpr double kBaseRollZ = 0.0;
   status->requested = "sadness";
   status->active = "sadness";
+  status->active_profile = "sadness_front_bow_48mm";
   status->estimated_contact_motion_gate_enabled = false;
   PublishExpressionStatus(status_writer, *status);
+
+  const std::function<void()> observe_request = [&]() {
+    if (!chat_runtime) return;
+    const EmotionState observed = emotion_source->GetState();
+    retarget_tracker->Observe(
+        observed.valid, observed.age_seconds <= kEmotionTimeoutSeconds,
+        observed.transport_sequence, observed.emotion,
+        observed.valence, observed.arousal);
+    status->link_age = observed.age_seconds;
+    UpdateRequestedStatus(status, observed, *commissioned);
+    status->pending = retarget_tracker->cancellation_requested()
+        ? retarget_tracker->emotion() : "";
+    status->pending_profile = status->pending.empty() ? "" :
+        ResolvePhysicalProfile(status->pending, *commissioned).profile;
+  };
+  observe_request();
 
   bool okay = RunPawLiftSegment(
       "sadness_body_sink", target_leg, 0.0, 0.0,
@@ -1363,7 +1628,7 @@ bool RunSadnessBodyVisualTest(Sender* sender, FeedbackSource* receiver,
       kSadnessBodySinkSeconds, sender, receiver, robot_state, command,
       pause_stats, monitor, stop_source, status, status_writer,
       0.0, -kSadnessBowRearRiseMeters,
-      0.0, kSadnessStanceMeters, {},
+      0.0, kSadnessStanceMeters, observe_request,
       0.0, kSadnessBowFrontDropMeters, 0.0, kBaseRollZ);
   double current_front_z = okay ? kSadnessBowFrontDropMeters : 0.0;
   double current_roll_z = kBaseRollZ;
@@ -1373,19 +1638,21 @@ bool RunSadnessBodyVisualTest(Sender* sender, FeedbackSource* receiver,
             << monitor->filtered()[1] << ',' << monitor->filtered()[2] << ','
             << monitor->filtered()[3] << std::endl;
   bool animated_support = low_support;
-  if (low_support) {
+  if (low_support &&
+      (!chat_runtime || retarget_tracker->may_start_next_phase())) {
     okay = RunPawLiftSegment(
         "sadness_body_settle", target_leg, 0.0, 0.0,
         0.0, 0.0, 0.0, 0.0, 0.0, kDiagonalSupportZ,
         kSadnessBodySettleSeconds, sender, receiver, robot_state, command,
         pause_stats, monitor, stop_source, status, status_writer,
         -kSadnessBowRearRiseMeters, -kSadnessBowRearRiseMeters,
-        kSadnessStanceMeters, kSadnessStanceMeters, {},
+        kSadnessStanceMeters, kSadnessStanceMeters, observe_request,
         kSadnessBowFrontDropMeters, kSadnessBowFrontDropMeters,
         kBaseRollZ, kBaseRollZ);
     animated_support = okay && monitor->support_count() == 4;
   }
   for (int sob = 1; okay && animated_support &&
+       (!chat_runtime || retarget_tracker->may_start_next_phase()) &&
        sob <= kSadnessSobCycles; ++sob) {
     const std::string prefix =
         "sadness_body_sob_" + std::to_string(sob) + "_";
@@ -1398,7 +1665,7 @@ bool RunSadnessBodyVisualTest(Sender* sender, FeedbackSource* receiver,
         kSadnessSobRiseSeconds, sender, receiver, robot_state, command,
         pause_stats, monitor, stop_source, status, status_writer,
         -kSadnessBowRearRiseMeters, -kSadnessBowRearRiseMeters,
-        kSadnessStanceMeters, kSadnessStanceMeters, {},
+        kSadnessStanceMeters, kSadnessStanceMeters, observe_request,
         current_front_z, raised_front_z,
         current_roll_z, sob_roll_z);
     if (okay) {
@@ -1409,14 +1676,15 @@ bool RunSadnessBodyVisualTest(Sender* sender, FeedbackSource* receiver,
     std::cout << "SADNESS_BODY_SOB cycle=" << sob
               << " phase=rise support_count=" << monitor->support_count()
               << std::endl;
-    if (animated_support) {
+    if (animated_support &&
+        (!chat_runtime || retarget_tracker->may_start_next_phase())) {
       okay = RunPawLiftSegment(
           prefix + "fall", target_leg, 0.0, 0.0,
           0.0, 0.0, 0.0, 0.0, 0.0, kDiagonalSupportZ,
           kSadnessSobFallSeconds, sender, receiver, robot_state, command,
           pause_stats, monitor, stop_source, status, status_writer,
           -kSadnessBowRearRiseMeters, -kSadnessBowRearRiseMeters,
-          kSadnessStanceMeters, kSadnessStanceMeters, {},
+          kSadnessStanceMeters, kSadnessStanceMeters, observe_request,
           current_front_z, kSadnessBowFrontDropMeters,
           current_roll_z, kBaseRollZ);
       if (okay) {
@@ -1429,14 +1697,15 @@ bool RunSadnessBodyVisualTest(Sender* sender, FeedbackSource* receiver,
                 << std::endl;
     }
   }
-  if (okay && animated_support) {
+  if (okay && animated_support &&
+      (!chat_runtime || retarget_tracker->may_start_next_phase())) {
     okay = RunPawLiftSegment(
         "sadness_body_final_hold", target_leg, 0.0, 0.0,
         0.0, 0.0, 0.0, 0.0, 0.0, kDiagonalSupportZ,
         kSadnessBodyFinalHoldSeconds, sender, receiver, robot_state, command,
         pause_stats, monitor, stop_source, status, status_writer,
         -kSadnessBowRearRiseMeters, -kSadnessBowRearRiseMeters,
-        kSadnessStanceMeters, kSadnessStanceMeters, {},
+        kSadnessStanceMeters, kSadnessStanceMeters, observe_request,
         kSadnessBowFrontDropMeters, kSadnessBowFrontDropMeters,
         kBaseRollZ, kBaseRollZ);
     animated_support = okay && monitor->support_count() == 4;
@@ -1447,15 +1716,30 @@ bool RunSadnessBodyVisualTest(Sender* sender, FeedbackSource* receiver,
     recover_okay = RunPawLiftSegment(
         "sadness_body_recover", target_leg, 0.0, 0.0,
         0.0, 0.0, 0.0, 0.0, 0.0, kDiagonalSupportZ,
-        kSadnessBodyRecoverSeconds, sender, receiver, robot_state, command,
-        pause_stats, monitor, stop_source, status, status_writer,
-        -kSadnessBowRearRiseMeters, 0.0,
-        kSadnessStanceMeters, 0.0, {},
-        current_front_z, 0.0, current_roll_z, 0.0);
+      kSadnessBodyRecoverSeconds, sender, receiver, robot_state, command,
+      pause_stats, monitor, stop_source, status, status_writer,
+      -kSadnessBowRearRiseMeters, 0.0,
+      kSadnessStanceMeters, 0.0, observe_request,
+      current_front_z, 0.0, current_roll_z, 0.0);
   }
-  const bool recovered = recover_okay && monitor->support_count() == 4;
+  bool neutral_hold_okay = true;
+  if (recover_okay && chat_runtime &&
+      retarget_tracker->cancellation_requested()) {
+    neutral_hold_okay = RunPawLiftSegment(
+        "sadness_body_neutral_hold", target_leg, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        ExpressionEngine::kNeutralHoldSeconds,
+        sender, receiver, robot_state, command, pause_stats, monitor,
+        stop_source, status, status_writer, 0.0, 0.0, 0.0, 0.0,
+        observe_request);
+  }
+  const bool recovered = recover_okay && neutral_hold_okay &&
+      monitor->support_count() == 4;
   status->active = "neutral";
-  status->phase = "sadness_body_visual_complete";
+  status->active_profile = "neutral_animal_breath";
+  status->phase = chat_runtime && retarget_tracker->cancellation_requested()
+      ? "sadness_external_neutral_complete"
+      : "sadness_body_visual_complete";
   if ((!okay || !recover_okay) && status->last_fault.empty()) {
     status->last_fault =
         "sadness body visual phase aborted by a live safety gate";
@@ -1464,7 +1748,7 @@ bool RunSadnessBodyVisualTest(Sender* sender, FeedbackSource* receiver,
         "sadness body visual did not preserve and recover four supports";
   }
   PublishExpressionStatus(status_writer, *status);
-  return okay && held_support && recover_okay && recovered;
+  return okay && held_support && recover_okay && neutral_hold_okay && recovered;
 }
 
 bool RunSadnessTest(Sender* sender, FeedbackSource* receiver,
@@ -1703,7 +1987,8 @@ bool RunSadnessTest(Sender* sender, FeedbackSource* receiver,
     status->last_fault = "sadness unload or landing confirmation failed";
     gate_failure = true;
   }
-  if (!four_feet_recovered && status->last_fault.empty()) {
+  if (!four_feet_recovered && status->last_fault.empty() &&
+      !g_safety_fault.load()) {
     status->last_fault =
         "sadness exact recovery did not restore four-foot support";
   }
@@ -1906,7 +2191,8 @@ bool RunFearGuardTest(Sender* sender, FeedbackSource* receiver,
   status->phase = transition_complete
       ? "fear_external_neutral_complete" : "fear_test_complete";
   status->estimated_contact_motion_gate_enabled = false;
-  if (!four_feet_recovered && status->last_fault.empty()) {
+  if (!four_feet_recovered && status->last_fault.empty() &&
+      !g_safety_fault.load()) {
     status->last_fault = "fear exact recovery did not restore four-foot support";
   }
   PublishExpressionStatus(status_writer, *status);
@@ -1932,6 +2218,8 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
   uint32_t recovery_last_tick = 0;
   int recovery_samples = 0;
   uint64_t last_transport_sequence = 0;
+  uint64_t joy_profile_cycle = 0;
+  bool joy_runtime_active = false;
   uint64_t anger_profile_cycle = 0;
   bool anger_runtime_active = false;
   uint64_t sadness_profile_cycle = 0;
@@ -1967,6 +2255,7 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
       last_transport_sequence = emotion.transport_sequence;
       engine.Request(emotion.emotion, emotion.valence, emotion.arousal,
                      trajectory_time);
+      UpdateRequestedStatus(status, emotion, commissioned);
     }
     if (!stale_latched &&
         (!emotion.valid || emotion.age_seconds > kEmotionTimeoutSeconds)) {
@@ -2028,26 +2317,98 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
             std::chrono::duration<double>(now - last_trajectory_tick).count(),
             kMaxTrajectoryStepSeconds);
         last_trajectory_tick = now;
+        // Advance neutral return/hold before dispatching an accepted external
+        // state machine. This prevents even one 1 kHz sample of an older
+        // compiled prototype from being sent at the profile handoff.
+        const ExpressionSample sample = engine.Sample(trajectory_time);
+        if (engine.active() == "joy" && engine.phase() == "profile") {
+          if (!joy_runtime_active) {
+            joy_runtime_active = true;
+            joy_profile_cycle = 0;
+          }
+          UpdateEngineStatus(status, engine);
+          status->active = "joy";
+          status->active_profile = "joy_alternating_front_paws_50mm";
+          status->phase = "joy_runtime";
+          status->profile_cycle = joy_profile_cycle;
+          status->pending.clear();
+          status->pending_profile.clear();
+          PublishExpressionStatus(status_writer, *status);
+
+          const uint64_t action_start_sequence = last_transport_sequence;
+          EmotionRetargetTracker retarget("joy", action_start_sequence);
+          const double runtime_lift = std::max(0.003, 0.050 * profile_scale);
+          const bool joy_okay = RunJoyPawTest(
+              sender, receiver, robot_state, command, pause_stats,
+              foot_load_monitor, stop_source, status_writer, status,
+              runtime_lift, true, &retarget, emotion_source, &commissioned);
+          last_transport_sequence = retarget.last_sequence();
+          const auto after_action = std::chrono::steady_clock::now();
+          last_trajectory_tick = after_action;
+          next = after_action;
+          hold_command = *command;
+          if (!joy_okay) return false;
+
+          if (retarget.cancellation_requested()) {
+            joy_runtime_active = false;
+            if (retarget.stale()) {
+              stale_latched = true;
+              status->requested = "neutral";
+              status->resolved = "neutral";
+              status->resolved_profile = "neutral_animal_breath";
+              status->active = "neutral";
+              status->active_profile = "neutral_animal_breath";
+              status->fallback = false;
+              status->fallback_reason.clear();
+              status->pending.clear();
+              status->pending_profile.clear();
+              status->release_state = "stale_link_release";
+              PublishExpressionStatus(status_writer, *status);
+              return true;
+            }
+            engine.CompleteExternalNeutralTransition(
+                retarget.emotion(), retarget.valence(), retarget.arousal(),
+                trajectory_time);
+          } else {
+            if (retarget.last_sequence() != action_start_sequence) {
+              engine.Request("joy", retarget.valence(), retarget.arousal(),
+                             trajectory_time);
+            }
+            ++joy_profile_cycle;
+          }
+
+          UpdateEngineStatus(status, engine);
+          status->profile_cycle = joy_runtime_active
+              ? joy_profile_cycle : engine.profile_cycle();
+          PublishExpressionStatus(status_writer, *status);
+          ++tick;
+          next += std::chrono::milliseconds(1);
+          std::this_thread::sleep_until(next);
+          continue;
+        }
         if (engine.active() == "anger" && engine.phase() == "profile") {
           if (!anger_runtime_active) {
             anger_runtime_active = true;
             anger_profile_cycle = 0;
           }
-          status->requested = engine.requested();
+          UpdateEngineStatus(status, engine);
           status->active = "anger";
+          status->active_profile = "anger_canonical_paw_placements";
           status->phase = "anger_runtime";
           status->profile_cycle = anger_profile_cycle;
           status->pending.clear();
+          status->pending_profile.clear();
           PublishExpressionStatus(status_writer, *status);
 
-          AngerRetargetTracker retarget(last_transport_sequence);
+          const uint64_t action_start_sequence = last_transport_sequence;
+          AngerRetargetTracker retarget(action_start_sequence);
           const double runtime_lift = std::max(
               0.010, kAngerLiftMeters * profile_scale);
           const bool anger_okay = RunAngerStompTest(
               sender, receiver, robot_state, command, pause_stats,
               foot_load_monitor, stop_source, status_writer, status,
               runtime_lift, static_cast<int>(anger_profile_cycle % 2), true,
-              &retarget, emotion_source);
+              &retarget, emotion_source, &commissioned);
           last_transport_sequence = retarget.last_sequence();
           const auto after_action = std::chrono::steady_clock::now();
           last_trajectory_tick = after_action;
@@ -2060,8 +2421,14 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
             if (retarget.stale()) {
               stale_latched = true;
               status->requested = "neutral";
+              status->resolved = "neutral";
+              status->resolved_profile = "neutral_animal_breath";
               status->active = "neutral";
+              status->active_profile = "neutral_animal_breath";
+              status->fallback = false;
+              status->fallback_reason.clear();
               status->pending.clear();
+              status->pending_profile.clear();
               status->release_state = "stale_link_release";
               PublishExpressionStatus(status_writer, *status);
               return true;
@@ -2070,15 +2437,16 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
                 retarget.emotion(), retarget.valence(), retarget.arousal(),
                 trajectory_time);
           } else {
+            if (retarget.last_sequence() != action_start_sequence) {
+              engine.Request("anger", retarget.valence(), retarget.arousal(),
+                             trajectory_time);
+            }
             ++anger_profile_cycle;
           }
 
-          status->requested = engine.requested();
-          status->active = engine.active();
-          status->phase = engine.phase();
+          UpdateEngineStatus(status, engine);
           status->profile_cycle = anger_runtime_active
               ? anger_profile_cycle : engine.profile_cycle();
-          status->pending = engine.pending();
           PublishExpressionStatus(status_writer, *status);
           ++tick;
           next += std::chrono::milliseconds(1);
@@ -2090,21 +2458,21 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
             sadness_runtime_active = true;
             sadness_profile_cycle = 0;
           }
-          status->requested = engine.requested();
+          UpdateEngineStatus(status, engine);
           status->active = "sadness";
+          status->active_profile = "sadness_front_bow_48mm";
           status->phase = "sadness_runtime";
           status->profile_cycle = sadness_profile_cycle;
           status->pending.clear();
+          status->pending_profile.clear();
           PublishExpressionStatus(status_writer, *status);
 
-          SadnessRetargetTracker retarget(last_transport_sequence);
-          const double runtime_lift = std::max(
-              kSadnessMinimumLiftMeters, kSadnessLiftMeters * profile_scale);
-          const bool sadness_okay = RunSadnessTest(
+          const uint64_t action_start_sequence = last_transport_sequence;
+          EmotionRetargetTracker retarget("sadness", action_start_sequence);
+          const bool sadness_okay = RunSadnessBodyVisualTest(
               sender, receiver, robot_state, command, pause_stats,
               foot_load_monitor, stop_source, status_writer, status,
-              runtime_lift, static_cast<int>(sadness_profile_cycle % 2),
-              &retarget, emotion_source);
+              0, &retarget, emotion_source, &commissioned);
           last_transport_sequence = retarget.last_sequence();
           const auto after_action = std::chrono::steady_clock::now();
           last_trajectory_tick = after_action;
@@ -2117,8 +2485,14 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
             if (retarget.stale()) {
               stale_latched = true;
               status->requested = "neutral";
+              status->resolved = "neutral";
+              status->resolved_profile = "neutral_animal_breath";
               status->active = "neutral";
+              status->active_profile = "neutral_animal_breath";
+              status->fallback = false;
+              status->fallback_reason.clear();
               status->pending.clear();
+              status->pending_profile.clear();
               status->release_state = "stale_link_release";
               PublishExpressionStatus(status_writer, *status);
               return true;
@@ -2127,18 +2501,16 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
                 retarget.emotion(), retarget.valence(), retarget.arousal(),
                 trajectory_time);
           } else {
-            engine.Request(
-                retarget.emotion(), retarget.valence(), retarget.arousal(),
-                trajectory_time);
+            if (retarget.last_sequence() != action_start_sequence) {
+              engine.Request("sadness", retarget.valence(), retarget.arousal(),
+                             trajectory_time);
+            }
             ++sadness_profile_cycle;
           }
 
-          status->requested = engine.requested();
-          status->active = engine.active();
-          status->phase = engine.phase();
+          UpdateEngineStatus(status, engine);
           status->profile_cycle = sadness_runtime_active
               ? sadness_profile_cycle : engine.profile_cycle();
-          status->pending = engine.pending();
           PublishExpressionStatus(status_writer, *status);
           ++tick;
           next += std::chrono::milliseconds(1);
@@ -2150,21 +2522,21 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
             fear_runtime_active = true;
             fear_profile_cycle = 0;
           }
-          status->requested = engine.requested();
+          UpdateEngineStatus(status, engine);
           status->active = "fear";
+          status->active_profile = "fear_planted_flinch_cower";
           status->phase = "fear_runtime";
           status->profile_cycle = fear_profile_cycle;
           status->pending.clear();
+          status->pending_profile.clear();
           PublishExpressionStatus(status_writer, *status);
 
-          FearRetargetTracker retarget(last_transport_sequence);
-          const double runtime_lift = std::max(
-              kFearMinimumLiftMeters, kFearLiftMeters * profile_scale);
-          const bool fear_okay = RunFearGuardTest(
+          const uint64_t action_start_sequence = last_transport_sequence;
+          EmotionRetargetTracker retarget("fear", action_start_sequence);
+          const bool fear_okay = RunFearBodyVisualTest(
               sender, receiver, robot_state, command, pause_stats,
               foot_load_monitor, stop_source, status_writer, status,
-              runtime_lift, static_cast<int>(fear_profile_cycle % 2), true,
-              &retarget, emotion_source);
+              1, &retarget, emotion_source, &commissioned);
           last_transport_sequence = retarget.last_sequence();
           const auto after_action = std::chrono::steady_clock::now();
           last_trajectory_tick = after_action;
@@ -2177,8 +2549,14 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
             if (retarget.stale()) {
               stale_latched = true;
               status->requested = "neutral";
+              status->resolved = "neutral";
+              status->resolved_profile = "neutral_animal_breath";
               status->active = "neutral";
+              status->active_profile = "neutral_animal_breath";
+              status->fallback = false;
+              status->fallback_reason.clear();
               status->pending.clear();
+              status->pending_profile.clear();
               status->release_state = "stale_link_release";
               PublishExpressionStatus(status_writer, *status);
               return true;
@@ -2187,20 +2565,24 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
                 retarget.emotion(), retarget.valence(), retarget.arousal(),
                 trajectory_time);
           } else {
+            if (retarget.last_sequence() != action_start_sequence) {
+              engine.Request("fear", retarget.valence(), retarget.arousal(),
+                             trajectory_time);
+            }
             ++fear_profile_cycle;
           }
 
-          status->requested = engine.requested();
-          status->active = engine.active();
-          status->phase = engine.phase();
+          UpdateEngineStatus(status, engine);
           status->profile_cycle = fear_runtime_active
               ? fear_profile_cycle : engine.profile_cycle();
-          status->pending = engine.pending();
           PublishExpressionStatus(status_writer, *status);
           ++tick;
           next += std::chrono::milliseconds(1);
           std::this_thread::sleep_until(next);
           continue;
+        }
+        if (engine.phase() != "profile" || engine.active() != "joy") {
+          joy_runtime_active = false;
         }
         if (engine.phase() != "profile" || engine.active() != "anger") {
           anger_runtime_active = false;
@@ -2211,7 +2593,6 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
         if (engine.phase() != "profile" || engine.active() != "fear") {
           fear_runtime_active = false;
         }
-        const ExpressionSample sample = engine.Sample(trajectory_time);
         SetStandCommand(command, sample);
         if (tick > 50 && TrackingError(*command, snapshot) > kHoldErrorLimit) {
           status->last_fault = "tracking error limit";
@@ -2221,13 +2602,11 @@ bool RunExpressionLoop(bool continuous, const std::set<std::string>& commissione
       }
     }
 
-    status->requested = engine.requested();
-    status->active = engine.active();
-    status->phase = engine.phase();
-    status->profile_cycle = anger_runtime_active ? anger_profile_cycle :
-        (sadness_runtime_active ? sadness_profile_cycle :
-         (fear_runtime_active ? fear_profile_cycle : engine.profile_cycle()));
-    status->pending = engine.pending();
+    UpdateEngineStatus(status, engine);
+    status->profile_cycle = joy_runtime_active ? joy_profile_cycle :
+        (anger_runtime_active ? anger_profile_cycle :
+         (sadness_runtime_active ? sadness_profile_cycle :
+          (fear_runtime_active ? fear_profile_cycle : engine.profile_cycle())));
     if (tick % 20 == 0) PublishExpressionStatus(status_writer, *status);
     if (stale_latched && engine.stale_reset_complete()) {
       status->release_state = "stale_link_release";
@@ -2723,7 +3102,11 @@ int main(int argc, char** argv) {
   std::cout << "PHASE release_to_robot" << std::endl;
   status.phase = "release";
   status.release_state = "releasing";
-  if (!okay && status.last_fault.empty()) status.last_fault = "runtime phase failed";
+  if (!okay && status.last_fault.empty()) {
+    status.last_fault = g_safety_fault.load()
+        ? "robot safety gate aborted active phase"
+        : "runtime phase failed";
+  }
   PublishExpressionStatus(&status_writer, status);
   if (acquired) sender.ControlGet(ROBOT);
   acquired = false;

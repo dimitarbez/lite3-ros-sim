@@ -4,7 +4,7 @@
 [Reference: accepted joy machinery](TICKET_JOY_FRONT_PAW.md) ·
 [Previous: Surprise](TICKET_SURPRISE.md)
 
-## Status — canonical-reset suite passed; live chat retarget remains
+## Status — normal physical selection, repetition, and retarget passed
 
 The controlled placement state machine, normal chat selection, newest-request
 retargeting, bounds, contact gates, and offline tests are implemented. The
@@ -15,10 +15,17 @@ final landing gate, and a first x/y-only recenter failed the same right-paw gate
 in cycle 2. The canonical-reset revision was then clean-built against the
 robot's actual aarch64 MotionSDK and passed its authorized three-cycle physical
 suite: all six placements restored four-foot support, with no safety fault,
-feedback pause, or ownership leak. Normal chat-driven selection remains disabled
-until the state-driven selection and mid-motion retarget path are tested live.
+feedback pause, or ownership leak. Normal state-driven selection was then
+tested on the physical robot. After one bounded support-transfer correction,
+two complete repeated loops passed under the continuous owner. A first mid-
+motion Anger-to-Disgust fallback attempt was safely preempted by its explicit
+75% battery floor at 74%. After the operator accepted the remaining battery, a
+new session used the configured 25% project floor and completed the same
+retarget without changing any source threshold or other hard gate.
 
-The installed canonical-reset runner SHA-256 is
+The currently installed integrated runner SHA-256 is
+`c2723ef4140a1bda88d18d6bfd09494febb2f2dea8d8db3f9d32b1e683a8025a`.
+The earlier explicit canonical-reset suite runner was
 `a77433ace5afb56a4bbd204df28c167cf7d46022d2b3155568086ac78fdd630c`.
 The previously accepted joy runner remains preserved under its checksum-named
 backup, and the normal allowlist remains `neutral`.
@@ -93,8 +100,9 @@ hold/release behavior.
   tracking, feedback, touchdown, ownership, and release evidence.
 - [x] Obtain operator acceptance as anger without harsh impact.
 - [x] Revalidate the canonical-reset three-cycle suite on hardware.
-- [ ] Validate normal chat selection and retargeting on hardware before adding
-  `anger` to the normal allowlist, as tracked by the
+- [x] Validate normal chat selection and repeated loops on hardware.
+- [ ] Validate a mid-motion normal chat retarget before adding `anger` to the
+  normal allowlist, as tracked by the
   [chat-driven physical emotion integration ticket](TICKET_PHYSICAL_EMOTION_CHAT.md).
 
 ## Acceptance criteria
@@ -253,8 +261,47 @@ those remain disabled pending a separately authorized supervised live test.
   bounded recovery.
 - Recovery: commissioning loops use the 0.65 s assertive hold and 1.30 s return.
   A chat retarget uses a 1.5 s return plus 0.35 s exact-neutral hold. Checked-in
-  `anger` selection remains disabled until the normal chat selection and
-  retarget path are physically validated.
+  `anger` selection remains disabled by default until the cross-emotion
+  integration ticket receives its consolidated operator verdict.
+
+## Normal chat integration evidence — 2026-09-20
+
+The first normal repeated run used the earlier 20 mm left rearward support
+shift. Its first loop passed both paws, and the next right placement passed,
+but the second left unload measured `5.806 N`, about `0.009 N` above the
+unchanged baseline-relative threshold. The runner lowered, restored four
+supports, and released without weakening a gate.
+
+The correction changed only the left rearward support shift to 25 mm; the right
+remains 35 mm and both lateral shifts remain 20 mm. Lift height, velocity,
+acceleration, unload, aggregate-support, landing, four-foot relatch, attitude,
+tracking, feedback, STOP, and ownership limits are unchanged. The clean local
+and aarch64 suites passed before the physical retry.
+
+The revised normal path established a valid 726-sample, `122.465 N` baseline
+and completed two consecutive full loops under one owner:
+
+- loop 1: left unload/landing `5.319/29.136 N`, right
+  `0.836/26.034 N`;
+- loop 2: right `0.327/25.891 N`, left `5.234/28.739 N`.
+
+A third loop also completed left `4.128/28.023 N` and right
+`0.235/26.321 N` with four supports. During its final assertive hold, battery
+fell from the explicit 75% floor to 74%. The hard battery gate preempted the
+pending Disgust retarget and released ownership immediately. Fresh postflight
+was state/gait/motion `1/0/0`, errors `0`, four supports, no runner, and no
+ownership marker. This is a successful normal Anger selection/repetition result
+and a successful battery-interlock result, but not a completed Anger retarget.
+
+The retarget was repeated in an independently acquired session starting at
+battery 64% with a valid 728-sample, `124.697 N` baseline and the existing
+`HARDWARE_MINIMUM_BATTERY=25` project floor explicitly authorized by the
+operator. During normal Anger, Disgust became the pending request. The runner
+completed the active paw placement and support restoration, returned over 1.5
+seconds, held exact neutral for 0.35 seconds, and activated
+`neutral_animal_breath`. Status preserved `requested_emotion=disgust`, reported
+`fallback_active=true`, four supports, no fault, and uninterrupted ownership.
+The session later released without a safety fault or ownership leak.
 
 ## Non-goals
 

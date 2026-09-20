@@ -109,14 +109,26 @@ int main() {
   // Both possible first-paw orders use the same independently valid left and
   // right workspaces.  The right side retains joy's physically calibrated
   // asymmetric rearward transfer.
-  CheckCombinedPose(0, kAngerLiftMeters, 0.020, -0.020);
-  CheckCombinedPose(1, kAngerLiftMeters, 0.035, 0.020);
-  CheckCombinedPose(1, kAngerLiftMeters, 0.035, 0.020);
-  CheckCombinedPose(0, kAngerLiftMeters, 0.020, -0.020);
-  CheckCrossTransfer(1, 0.0, 0.035, 0.0, 0.020);
-  CheckCrossTransfer(0, 0.0, 0.020, 0.0, -0.020);
-  CheckRelatch(0, 0.020, -0.020);
-  CheckRelatch(1, 0.035, 0.020);
+  CheckCombinedPose(0, kAngerLiftMeters,
+                    kAngerLeftSupportShiftXMeters,
+                    -kAngerSupportShiftYMeters);
+  CheckCombinedPose(1, kAngerLiftMeters,
+                    kAngerRightSupportShiftXMeters,
+                    kAngerSupportShiftYMeters);
+  CheckCombinedPose(1, kAngerLiftMeters,
+                    kAngerRightSupportShiftXMeters,
+                    kAngerSupportShiftYMeters);
+  CheckCombinedPose(0, kAngerLiftMeters,
+                    kAngerLeftSupportShiftXMeters,
+                    -kAngerSupportShiftYMeters);
+  CheckCrossTransfer(1, 0.0, kAngerRightSupportShiftXMeters,
+                     0.0, kAngerSupportShiftYMeters);
+  CheckCrossTransfer(0, 0.0, kAngerLeftSupportShiftXMeters,
+                     0.0, -kAngerSupportShiftYMeters);
+  CheckRelatch(0, kAngerLeftSupportShiftXMeters,
+               -kAngerSupportShiftYMeters);
+  CheckRelatch(1, kAngerRightSupportShiftXMeters,
+               kAngerSupportShiftYMeters);
 
   // Sample every millisecond through lowering.  Cartesian velocity and a
   // finite-difference acceleration remain inside the anger-specific limits;

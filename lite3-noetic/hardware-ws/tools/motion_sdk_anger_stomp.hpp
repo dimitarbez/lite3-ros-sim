@@ -21,6 +21,9 @@ constexpr double kAngerLoopSeconds = 7.70;
 
 constexpr double kAngerLiftMeters = 0.035;
 constexpr double kAngerMaximumLiftMeters = 0.035;
+constexpr double kAngerLeftSupportShiftXMeters = 0.025;
+constexpr double kAngerRightSupportShiftXMeters = 0.035;
+constexpr double kAngerSupportShiftYMeters = 0.020;
 constexpr double kAngerBraceMeters = 0.008;
 constexpr double kAngerStanceMeters = 0.006;
 constexpr double kAngerMaximumDownwardVelocityMps = 0.190;

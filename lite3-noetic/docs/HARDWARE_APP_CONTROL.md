@@ -1425,6 +1425,66 @@ gates.
   `motion_gate_enabled` false until the separate front-paw ticket's evidence and
   acceptance gates are complete.
 
+## Chat-driven physical integration checkpoint — 2026-09-20
+
+With current-task authorization, the development-computer chat and
+`EmotionEngine` drove the physical Lite3 through the validated uplink and the
+single continuous robot-side MotionSDK owner. Gazebo and its mapper/safety
+bridge were not used. Fresh sessions began in state/gait/motion `1/0/0` with
+zero errors, STOP false, centered Retroid input, compatible fresh telemetry,
+and no competing owner.
+
+Normal physical selection passed for Neutral, Joy, Sadness, Fear, and Anger.
+Joy passed two repeated final-geometry loops and lower-first retargets to
+Neutral and the Surprise neutral fallback. Sadness and Fear completed their
+planted loops and exact-neutral retargets; Fear then transitioned to Anger.
+After increasing only the left Anger rearward support transfer from 20 to
+25 mm, with every hard gate unchanged, Anger passed two full repeated loops and
+both placements in a third.
+
+The first Anger-to-Disgust retarget did not complete: battery fell from that
+session's explicit 75% floor to 74% during the Anger hold. The hard gate aborted
+and released immediately. Fresh postflight was state/gait/motion `1/0/0`,
+errors zero, four estimated supports, no runner, and no ownership marker. This
+was retained as battery-interlock evidence and was not counted as a fallback
+pass.
+
+After the operator explicitly accepted the remaining battery, a newly acquired
+session used the project's existing configured 25% floor. No source threshold
+and no contact, attitude, tracking, feedback, state, STOP, watchdog, or
+ownership gate changed. From a valid 728-sample, `124.697 N` baseline, Anger
+retargeted to the Disgust Neutral fallback through completed paw placement,
+1.5-second canonical recovery, and 0.35-second exact-neutral hold. Status kept
+`requested_emotion=disgust`, resolved `neutral_animal_breath`, reported four
+supports and no fault, and retained SDK ownership. Affection, Curiosity, and
+Surprise subsequently produced the same truthful requested-category/Neutral-
+fallback status without needlessly restarting Neutral.
+
+A rapid Anger -> Affection -> Sadness sequence replaced the obsolete Affection
+pending target and started only Sadness after exact neutral. A final independent
+session used a valid 716-sample, `123.592 N` baseline and completed Sadness ->
+Fear -> Neutral through the same 1.5 + 0.35-second contract with four supports.
+Final release reported no robot safety fault and removed the ownership marker.
+Fresh postflight was state/gait/motion `1/0/0`, battery 54%, errors zero,
+roll/pitch `-0.070/1.193 deg`, centered fresh Retroid, STOP false, released
+status, and no SDK owner, lock, or runner. Functional live gates are complete;
+the consolidated operator visual verdict and default-allowlist decision remain.
+
+The chat client timeout observed during this session was traced to the 2 Hz
+heartbeat overwriting the one-shot assistant appraisal in the client's latest
+state slot. The robot had received the state, but the terminal continued
+waiting. The client now retains the matching assistant appraisal per turn, and
+the assistant-then-heartbeat regression passes. A non-actuating real-uplink
+repeat then completed Fear, Affection, Curiosity, Disgust, and Surprise turns
+without timeout. The final Surprise reached the robot receiver as schema `1.1`,
+state sequence `10`, transport sequence `1528`, and `turn-000005`. The
+standalone tunnel target was also corrected after its
+`ClearAllForwardings=yes` option was found to erase its own local forward.
+
+The runner now preserves a hard robot-safety abort as the primary `last_fault`.
+The clean installed aarch64 binary passed all nine native suites and has SHA-256
+`c2723ef4140a1bda88d18d6bfd09494febb2f2dea8d8db3f9d32b1e683a8025a`.
+
 ## Sources
 
 - Local vendor manuals under [`lite3-robot-docs`](../../lite3-robot-docs/README.md).

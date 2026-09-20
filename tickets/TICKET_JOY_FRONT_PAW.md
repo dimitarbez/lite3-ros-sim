@@ -4,20 +4,20 @@
 [Neutral reference](TICKET_NEUTRAL_BREATHING.md) ·
 [Next: Affection](TICKET_AFFECTION.md)
 
-## Status — accepted 2026-09-20
+## Status — accepted and validated through normal physical chat selection
 
 **The physical joy gesture is implemented, telemetry-validated, and
 operator-accepted.** It is a five-second alternating front-paw expression, not
 an airborne hop: the robot transfers support, lifts and gently replaces the
 front-left paw, then repeats with the front-right paw.
 
-The accepted runner was compiled and tested against the robot's aarch64
-MotionSDK and installed with SHA-256:
+The original accepted suite runner was compiled and tested against the robot's
+aarch64 MotionSDK and installed with SHA-256
 `b00a7aacf331a3944eaa19937091f2eaa75a60fe9090f6cc135894f0739b0092`.
 The accepted live suite was invoked explicitly with the joy suite enabled and a
-50 mm paw-lift target. Continuous chat-driven selection of this trajectory and
-the seven remaining emotion implementations are tracked in the
-[emotion ticket index](README.md).
+50 mm paw-lift target. The continuous runner now selects this trajectory for an
+allowlisted Joy state, and its normal state-driven selection plus lower-first
+Joy-to-Neutral and Joy-to-unsupported retargets passed physically on 2026-09-20.
 
 ## Accepted behavior
 
@@ -29,11 +29,20 @@ Each paw uses five bounded phases:
 4. lower gently for 0.60 seconds;
 5. settle back to four-foot stand for 0.50 seconds.
 
-That is 2.50 seconds per paw and exactly 5.00 seconds for joy. The accepted
-geometry uses a 50 mm paw target, 20 mm lateral transfer on each side, 20 mm
-rearward transfer for the left paw, and 35 mm rearward transfer for the right
-paw. The right-side asymmetry is deliberate: live load evidence showed that a
-symmetric transfer left excessive residual load on the front-right paw.
+That is 2.50 seconds per paw and exactly 5.00 seconds for joy. The initial
+single-suite acceptance used a 50 mm paw target, 20 mm lateral transfer on each
+side, 20 mm rearward transfer for the left paw, and 35 mm rearward transfer for
+the right paw. The right-side asymmetry was deliberate: live load evidence
+showed that a symmetric transfer left excessive residual load on the
+front-right paw.
+
+The final repeated-chat geometry uses a 50 mm paw target, 20 mm lateral
+transfer on each side, 30 mm rearward transfer for the left paw, and 35 mm
+rearward transfer for the right paw. The original accepted single suite used
+20 mm on the left; normal repetition showed that 20 mm and then 25 mm retained
+too much left-paw load on later cycles. The 30 mm revision passed two complete
+loops and a mid-paw retarget without weakening any unload, support, landing, or
+workspace gate.
 
 The gesture remains inside the sole continuous official MotionSDK owner. It
 does not use a vendor gait/action, external wrench, torque feed-forward,
@@ -143,14 +152,14 @@ preemption was separately observed working during this commissioning effort.
 The cross-emotion selector and live chat acceptance are tracked by the
 [chat-driven physical emotion integration ticket](TICKET_PHYSICAL_EMOTION_CHAT.md).
 
-- [ ] Make the accepted paw trajectory selectable by normal validated joy state in
+- [x] Make the accepted paw trajectory selectable by normal validated joy state in
   the continuous chat session, using the same exact-neutral transition engine.
-- [ ] Preserve the explicit bounded suite as a regression/commissioning mode
+- [x] Preserve the explicit bounded suite as a regression/commissioning mode
   after normal joy-state integration.
-- [ ] Add a deterministic state-machine test for retargeting while either paw is
+- [x] Add a deterministic state-machine test for retargeting while either paw is
   raised: finish lower/settle, return and hold exact neutral, then enter only the
   newest pending emotion.
-- [ ] Complete live neutral→joy, joy→neutral, and joy→another-emotion tests
+- [x] Complete live neutral→joy, joy→neutral, and joy→another-emotion tests
   through the normal chat path.
 - [ ] Use this implementation pattern—not necessarily this choreography—for the
   seven remaining emotions in the [emotion ticket index](README.md).
@@ -162,3 +171,30 @@ The cross-emotion selector and live chat acceptance are tracked by the
 - Vendor gait/action or long-twist jump primitives during SDK ownership.
 - Open-loop lifted-foot commands without unload, support, and landing evidence.
 - Skipping exact neutral when changing emotions.
+
+## Normal chat integration evidence — 2026-09-20
+
+The first normal Joy run used the original 20 mm left transfer and correctly
+failed unload at `8.582 N`; it lowered, restored four supports, and released
+without a safety fault. A 25 mm retry passed one loop but the next left lift
+retained `8.017 N`, so it also failed closed. Neither threshold was weakened.
+
+With the final 30/35 mm left/right rearward shifts, two consecutive loops
+passed under one continuous owner:
+
+- loop 1: left unload/landing `3.863/34.021 N`, right
+  `6.838/30.434 N`;
+- loop 2: left `4.987/34.137 N`, right `1.225/30.249 N`.
+
+A Neutral chat state arrived during the next left-paw cycle. The paw unloaded
+to `3.060 N`, landed at `28.840 N` with four supports, returned to exact
+canonical stand over 1.5 seconds, and held it for 0.35 seconds without releasing
+ownership. A separate Surprise request arrived during a right-paw cycle; that
+paw unloaded to `0.364 N`, landed at `24.124 N`, and completed the same
+transition. Status retained `requested_emotion=surprise` while selecting
+`neutral_animal_breath` with fallback reason
+`physical_reaction_not_accepted`.
+
+The final integrated aarch64 runner, including the unchanged hard gates, is
+installed at SHA-256
+`c2723ef4140a1bda88d18d6bfd09494febb2f2dea8d8db3f9d32b1e683a8025a`.

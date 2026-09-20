@@ -4,19 +4,35 @@
 [Hardware runtime](../lite3-noetic/hardware-ws/README.md) ·
 [ROS chat and EmotionEngine adapter](../lite3-noetic/ws/Lite3_VMC/src/emotion_bot_ros/README.md)
 
-## Status — planned integration; physical execution not authorized by this ticket
+## Status — implemented; live functional gates passed, operator verdict pending
 
 The development-computer chat, `EmotionEngine`, validated emotion-state uplink,
-and continuous robot-side MotionSDK owner already exist. Neutral is the only
-category enabled in the normal hardware allowlist today. Joy, Sadness, Fear,
-and Anger each have an operator-accepted physical reaction, but their normal
-chat-driven selection and transition paths are not all physically validated.
+and continuous robot-side MotionSDK owner now drive the accepted Neutral, Joy,
+Sadness, Fear, and Anger reactions. On 2026-09-20 the physical robot completed
+normal state-driven Neutral, Joy, Sadness, Fear, and Anger selection, exact-
+neutral accepted/fallback retargets, all four unsupported-category fallbacks,
+and a rapid newest-request-only transition under the sole continuous owner.
+Every run ended in state/gait/motion `1/0/0`, zero errors, centered Retroid
+input, STOP false, and a clean SDK release.
+
+The first session's explicit 75% floor correctly aborted at 74%. With the
+operator's explicit confirmation that the remaining battery was acceptable, a
+separate session used the project's configured 25% abort floor without
+changing any code or weakening any other safety gate. That session closed the
+Anger-to-Disgust, unsupported-category, rapid-retarget, and final-release
+telemetry gates. The normal checked-in allowlist remains `neutral` until the
+operator records the consolidated visual verdict for the complete sweep.
 
 This ticket connects those accepted reactions to the same conversation-driven
 emotional state used by Gazebo. It does not authorize a physical run by itself.
 Every live acceptance step still requires explicit current-task approval and
 the normal robot, operator, STOP, state, telemetry, ownership, and clear-area
 checks.
+
+Completion of this ticket requires a supervised run on the physical Lite3.
+Gazebo, ROS topic publication, an offline suite, or a successful aarch64 build
+may support preparation, but none of them is acceptance evidence for the live
+chat-selection, retargeting, fallback, or final-release requirements below.
 
 ## Goal
 
@@ -59,10 +75,10 @@ Compiled profiles, planted prototypes, and rejected candidates do not qualify.
 | EmotionEngine category | Physical reaction at ticket completion | Current integration state |
 | --- | --- | --- |
 | `neutral` | Accepted 3.25-second animal-like breathing | Normal hardware path accepted |
-| `joy` | Accepted 50 mm alternating front-paw joy gesture | Physical suite accepted; continuous chat selection and retarget remain |
-| `sadness` | Accepted front-only 48 mm planted bow and heave loop | Physical loop accepted; normal chat selection and retarget remain |
-| `anger` | Accepted canonical-reset alternating controlled paw placements | Selector/retarget logic passes offline; normal live chat validation remains |
-| `fear` | Accepted all-feet-planted flinch/recoil/cower/freeze loop | Physical run and operator visual verdict accepted; normal chat selection and retarget remain |
+| `joy` | Accepted 50 mm alternating front-paw joy gesture | Normal physical selection and mid-paw retarget passed |
+| `sadness` | Accepted front-only 48 mm planted bow and heave loop | Normal physical selection and exact-neutral retarget passed |
+| `anger` | Accepted canonical-reset alternating controlled paw placements | Normal physical selection, repeated loops, and mid-motion fallback retarget passed |
+| `fear` | Accepted all-feet-planted flinch/recoil/cower/freeze loop | Normal physical selection and Fear-to-Anger retarget passed |
 | `affection` | Neutral breathing fallback | Final physical reaction not implemented and accepted |
 | `curiosity` | Neutral breathing fallback | Final physical reaction not implemented and accepted |
 | `disgust` | Neutral breathing fallback | Final physical reaction not implemented and accepted |
@@ -166,49 +182,51 @@ forever on stale state.
 
 ## Implementation checklist
 
-- [ ] Add a table-driven physical profile resolver with all nine engine
+- [x] Add a table-driven physical profile resolver with all nine engine
   categories and explicit neutral fallbacks for unaccepted categories.
-- [ ] Integrate the accepted Joy paw state machine into the continuous runner,
+- [x] Integrate the accepted Joy paw state machine into the continuous runner,
   including safe mid-left-paw and mid-right-paw retarget behavior.
-- [ ] Route normal `sadness` state to the accepted front-only 48 mm planted bow
+- [x] Route normal `sadness` state to the accepted front-only 48 mm planted bow
   and verify newest-request retarget behavior.
-- [ ] Route normal `fear` state to the accepted all-feet-planted physical Fear
+- [x] Route normal `fear` state to the accepted all-feet-planted physical Fear
   animation and verify newest-request retarget behavior.
-- [ ] Retain the accepted canonical-reset Anger selector and close its remaining
-  live normal-chat/retarget validation gap.
-- [ ] Preserve requested emotion separately from resolved/active profile in
+- [x] Retain the accepted canonical-reset Anger selector and integrate its
+  normal-chat/retarget path offline; live validation remains below.
+- [x] Preserve requested emotion separately from resolved/active profile in
   expression status, including unsupported-to-neutral fallback evidence.
-- [ ] Add an operator-visible way to inspect chat turn, engine category,
+- [x] Add an operator-visible way to inspect chat turn, engine category,
   requested physical category, resolved profile, phase, pending request, and
   fallback reason together.
-- [ ] Keep `HARDWARE_COMMISSIONED_EMOTIONS=neutral` as the fail-closed default
-  until each accepted reaction passes its authorized live chat tests; then
-  document and enable only the completed accepted set.
-- [ ] Update the hardware runtime, usage, verification, and relevant per-emotion
+- [x] Keep `HARDWARE_COMMISSIONED_EMOTIONS=neutral` as the fail-closed default
+  while live functional tests and the consolidated operator verdict are open.
+- [ ] After the operator's consolidated verdict, enable and document only the
+  completed accepted set.
+- [x] Update the hardware runtime, usage, verification, and relevant per-emotion
   tickets with the exact implementation and dated evidence.
 
 ## Offline verification
 
-- [ ] Unit-test all nine category resolutions: Neutral, Joy, Sadness, Fear, and
+- [x] Unit-test all nine category resolutions: Neutral, Joy, Sadness, Fear, and
   Anger select their final accepted implementations; the other four select
   neutral.
-- [ ] Verify fallback does not mutate emotion-state schema `1.1`, category,
+- [x] Verify fallback does not mutate emotion-state schema `1.1`, category,
   valence/arousal, turn correlation, or transport sequence.
-- [ ] Verify requested and active/resolved status for every supported and
+- [x] Verify requested and active/resolved status for every supported and
   fallback category, including two unsupported categories in succession.
-- [ ] Test same-category updates and unsupported-category changes without loop
+- [x] Test same-category updates and unsupported-category changes without loop
   restart or discontinuous commands.
-- [ ] Test rapid accepted -> unsupported -> accepted retargeting so only the
+- [x] Test rapid accepted -> unsupported -> accepted retargeting so only the
   newest request starts after the exact-neutral transition.
-- [ ] Test retargeting during every Joy and Anger raised-paw/placement phase and
+- [x] Test retargeting during every Joy and Anger raised-paw/placement phase and
   during every Sadness and Fear phase; a raised paw must land and four supports
   must be restored before neutral return completes.
-- [ ] Test stale link, authenticated STOP, state `8`, nonzero robot error,
+- [x] Test stale link, authenticated STOP, state `8`, nonzero robot error,
   feedback pause/death, tracking violation, and runner crash/release behavior.
-- [ ] Run `make -C lite3-noetic verify-emotion` and
+- [x] Run the non-Gazebo portions of `verify-emotion` and the complete
   `make -C lite3-noetic verify-hardware-offline`; offline success is not
-  physical commissioning evidence.
-- [ ] Clean-build and pass the complete runner suite against the robot's actual
+  physical commissioning evidence. Gazebo was intentionally excluded because
+  this ticket requires the physical robot.
+- [x] Clean-build and pass the complete runner suite against the robot's actual
   aarch64 MotionSDK before any authorized live run.
 
 ## Live acceptance plan
@@ -218,26 +236,126 @@ turn/state, transport sequence, requested/resolved/active profile, phase,
 joint/IMU/contact/robot-state telemetry, feedback age, ownership, fault/release
 state, and operator observation.
 
-- [ ] Prove a real chat turn influences `EmotionEngine` and reaches the robot as
+Run every item in this section against the physical robot, not Gazebo. Keep the
+simulator graph, Gazebo expression mapper, simulator safety bridge, and
+`/emotion_bot/joy_out` out of the hardware session.
+
+- [x] Prove a real chat turn influences `EmotionEngine` and reaches the robot as
   the same validated category, valence, arousal, turn ID, and ordered sequence.
-- [ ] Validate neutral -> Joy, Joy -> neutral, and a mid-paw Joy -> unsupported
+- [x] Validate neutral -> Joy, Joy -> neutral, and a mid-paw Joy -> unsupported
   request that lands safely, returns through exact neutral, and remains neutral.
-- [ ] Validate neutral -> Sadness, Sadness -> neutral, and mid-loop Sadness ->
+- [x] Validate neutral -> Sadness, Sadness -> neutral, and mid-loop Sadness ->
   another accepted reaction through exact neutral.
-- [ ] Validate neutral -> Fear, Fear -> neutral, and mid-loop Fear -> another
+- [x] Validate neutral -> Fear, Fear -> neutral, and mid-loop Fear -> another
   accepted/fallback reaction through exact neutral.
-- [ ] Validate neutral -> Anger, Anger -> neutral, and mid-paw Anger -> newest
+- [x] Validate neutral -> Anger, Anger -> neutral, and mid-paw Anger -> newest
   accepted/fallback request through the canonical-reset path.
 - [ ] Run a bounded nine-category chat sweep. Neutral, Joy, Sadness, Fear, and
   Anger must be visually recognizable as their accepted physical reactions;
   Affection, Curiosity, Disgust, and Surprise must visibly remain on neutral
   breathing while status preserves each requested category.
-- [ ] Verify rapid turns never start an obsolete pending reaction and never
+- [x] Verify rapid turns never start an obsolete pending reaction and never
   leave a paw raised, residual offset, second SDK owner, safety fault, or
   unreleased process after shutdown.
 - [ ] Record separate operator verdicts for conversation influence, correct
   reaction selection/fallback, transition quality, and final stationary
   release. Joint movement or topic publication alone is not a pass.
+
+## Physical integration evidence — 2026-09-20
+
+The authorized runs used the physical Lite3, not Gazebo. Every session began
+from state/gait/motion `1/0/0`, zero error flags, centered Retroid input, STOP
+false, fresh `0x0901`/`0x0906` records, active safety services, and no competing
+runner or ownership marker. The development computer retained chat and
+`EmotionEngine`; the perception computer remained the sole MotionSDK owner.
+
+- Neutral arrived as `turn-000001`, state sequence `2`, transport sequence
+  `266`, and selected `neutral_animal_breath` with correlated status.
+- Final Joy uses the accepted 50 mm lift with 30 mm left and 35 mm right
+  rearward support shifts. Two consecutive loops passed: left unload/landing
+  `3.863/34.021 N` then `4.987/34.137 N`; right unload/landing
+  `6.838/30.434 N` then `1.225/30.249 N`. A later Neutral request arrived
+  during a left-paw cycle; the paw unloaded to `3.060 N`, landed at `28.840 N`,
+  and completed the 1.5-second return plus 0.35-second hold without releasing
+  ownership. A Surprise request during a right-paw cycle similarly landed at
+  `24.124 N`, then status preserved `requested_emotion=surprise` while resolving
+  to Neutral with `fallback_active=true`.
+- Sadness completed its full planted bow/heave/recovery loop with four supports,
+  then accepted a mid-loop Neutral request and completed the same exact-neutral
+  contract under uninterrupted ownership.
+- Fear completed two full planted five-second loops, then retargeted through
+  exact neutral. A later Fear request transitioned to Anger under the same
+  owner through the validated chat input and `EmotionEngine` path.
+- The first normal Anger repeat missed the unchanged left unload threshold by
+  about `0.009 N`. Increasing only the left rearward support shift from 20 to
+  25 mm retained every lift, contact, landing, and four-support gate. The
+  revised normal path then passed two complete loops: left unload/landing
+  `5.319/29.136 N` and `5.234/28.739 N`; right `0.836/26.034 N` and
+  `0.327/25.891 N`. A third loop also completed both placements before the
+  battery interlock fired during the final hold.
+- At 74%, below the explicit 75% session floor, the battery safety gate aborted
+  immediately and released SDK ownership. Fresh postflight remained
+  state/gait/motion `1/0/0`, errors `0`, four estimated supports, no runner,
+  and no ownership marker. That interrupted Disgust request was not counted as
+  a pass.
+
+After the operator explicitly confirmed that the remaining battery was
+acceptable, the unfinished gates were rerun with the existing project default
+`HARDWARE_MINIMUM_BATTERY=25`; no source threshold and no contact, attitude,
+tracking, feedback, state, STOP, watchdog, or ownership gate changed.
+
+- The resumed session started at battery 64% with a valid 728-sample,
+  `124.697 N` contact baseline. Anger ran normally, then a Disgust request
+  completed the lower/settle, 1.5-second canonical return, and 0.35-second
+  hold. Status preserved `requested_emotion=disgust`, resolved and activated
+  `neutral_animal_breath`, reported `fallback_active=true`, four supports, no
+  fault, and uninterrupted ownership.
+- Affection, Curiosity, and Surprise were then selected in turn. Each retained
+  its truthful requested category while resolving to Neutral with reason
+  `physical_reaction_not_accepted`; the already-active neutral profile did not
+  restart needlessly. Together with Disgust, this completed all four physical
+  fallback checks.
+- During a later Anger sequence, Affection was requested and replaced 0.4
+  seconds later by Sadness. Anger completed its current placements and exact-
+  neutral transition, then started Sadness directly; the obsolete Affection
+  target never started. A final Neutral request cancelled the remaining
+  Sadness repeat and completed its exact-neutral recovery.
+- That session released with no safety fault. Fresh postflight was
+  state/gait/motion `1/0/0`, battery 59%, errors zero, centered fresh Retroid,
+  STOP false, no runner, and no ownership marker.
+- A final independent session started at battery 59% with a valid 716-sample,
+  `123.592 N` baseline. Fear was requested during an active Sadness loop.
+  Sadness completed recovery and the exact 1.5 + 0.35-second neutral contract,
+  then Fear started directly with four supports. The final Neutral request
+  completed Fear's 1.5-second recovery and 0.35-second hold. Correlated status
+  showed state sequence `6`, transport sequence `1493`, Neutral active, four
+  supports, no fault, and SDK ownership before shutdown.
+- Final release reported maximum feedback age/update gap
+  `148.544/149.037 ms`, four bounded pause/recoveries, no robot safety fault,
+  and a removed ownership marker. Fresh postflight was state/gait/motion
+  `1/0/0`, battery 54%, errors zero, roll/pitch `-0.070/1.193 deg`, centered
+  fresh Retroid, STOP false, released status, and no SDK owner, lock, or runner.
+
+The interactive client also exposed an ordering race: the 2 Hz heartbeat could
+overwrite the one-shot assistant appraisal while the client waited, even though
+the robot had already received the state. `emotion_chat.py` now retains the
+matching assistant state for the active turn. A regression test reproduces the
+assistant-then-heartbeat ordering. This fix passes the shared unit and ROS
+integration suites. It also completed five consecutive interactive turns over
+the real hardware uplink without actuation: Fear, Affection, Curiosity, Disgust,
+and Surprise. The last arrived at the robot receiver as schema `1.1`, state
+sequence `10`, transport sequence `1528`, and matching `turn-000005`. The
+subsequent actuated sessions completed the corresponding fallback sweep.
+
+That check also exposed and fixed the standalone tunnel target: its prior
+`ClearAllForwardings=yes` option silently removed its own `-L` forward. The
+corrected target opened `127.0.0.1:8767`, and the five turns above traversed it.
+
+The current clean aarch64 runner passed all nine native suites and is installed
+at SHA-256
+`c2723ef4140a1bda88d18d6bfd09494febb2f2dea8d8db3f9d32b1e683a8025a`.
+Its fault precedence also ensures a hard battery/attitude/state safety abort is
+not mislabeled as a choreography support-recovery failure.
 
 ## Acceptance criteria
 
@@ -251,7 +369,8 @@ state, and operator observation.
 - Accepted reactions are entered only through the normal allowlist and the
   shared exact-neutral transition contract; lifted paws always land first.
 - The live transition and nine-category sweep pass with fresh telemetry,
-  exclusive ownership, no safety fault, and an operator visual verdict.
+  exclusive ownership, no safety fault, and an operator visual verdict on the
+  physical Lite3; a Gazebo run cannot satisfy this criterion.
 - Stale chat, STOP, safety failure, or shutdown leaves the robot in the existing
   verified neutral/release path with no residual command or competing sender.
 

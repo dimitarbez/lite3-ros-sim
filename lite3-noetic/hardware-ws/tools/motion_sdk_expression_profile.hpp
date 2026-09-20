@@ -7,6 +7,7 @@
 #include <set>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "motion_sdk_breath_profile.hpp"
@@ -35,6 +36,108 @@ struct ExpressionKeyframe {
 struct ExpressionProfile {
   std::vector<ExpressionKeyframe> entrance;
   std::vector<ExpressionKeyframe> idle;
+};
+
+struct PhysicalProfileDefinition {
+  const char* requested_emotion;
+  const char* accepted_profile;
+  bool physically_accepted;
+};
+
+struct PhysicalProfileResolution {
+  std::string requested_emotion;
+  std::string resolved_emotion;
+  std::string profile;
+  bool fallback{false};
+  std::string fallback_reason;
+};
+
+// This table names only the final operator-accepted physical reactions.  The
+// runtime allowlist is a separate, fail-closed gate: an accepted reaction is
+// not selectable by normal chat until its live chat/retarget test is complete.
+inline const std::vector<PhysicalProfileDefinition>& PhysicalProfileTable() {
+  static const std::vector<PhysicalProfileDefinition> table{
+      {"neutral", "neutral_animal_breath", true},
+      {"joy", "joy_alternating_front_paws_50mm", true},
+      {"sadness", "sadness_front_bow_48mm", true},
+      {"anger", "anger_canonical_paw_placements", true},
+      {"fear", "fear_planted_flinch_cower", true},
+      {"affection", "neutral_animal_breath", false},
+      {"curiosity", "neutral_animal_breath", false},
+      {"disgust", "neutral_animal_breath", false},
+      {"surprise", "neutral_animal_breath", false},
+  };
+  return table;
+}
+
+inline const PhysicalProfileDefinition& PhysicalProfileFor(
+    const std::string& emotion) {
+  for (const auto& item : PhysicalProfileTable()) {
+    if (emotion == item.requested_emotion) return item;
+  }
+  throw std::invalid_argument("unknown emotion");
+}
+
+inline PhysicalProfileResolution ResolvePhysicalProfile(
+    const std::string& emotion, const std::set<std::string>& enabled) {
+  const auto& definition = PhysicalProfileFor(emotion);
+  if (!definition.physically_accepted) {
+    return {emotion, "neutral", "neutral_animal_breath", true,
+            "physical_reaction_not_accepted"};
+  }
+  if (emotion != "neutral" && enabled.count(emotion) == 0) {
+    return {emotion, "neutral", "neutral_animal_breath", true,
+            "not_enabled_in_normal_allowlist"};
+  }
+  return {emotion, emotion, definition.accepted_profile, false, ""};
+}
+
+// Raised-paw and planted multi-phase reactions sample the state link while
+// they own the command stream.  This latch keeps only the newest request and
+// never interrupts the current safe phase.  A stale link cannot be revived in
+// the same ownership session.
+class EmotionRetargetTracker {
+ public:
+  EmotionRetargetTracker(std::string active_emotion,
+                         uint64_t initial_sequence)
+      : active_emotion_(std::move(active_emotion)),
+        last_sequence_(initial_sequence), emotion_(active_emotion_) {}
+
+  void Observe(bool valid, bool fresh, uint64_t sequence,
+               const std::string& emotion, double valence, double arousal) {
+    if (stale_) return;
+    if (!valid || !fresh) {
+      cancellation_requested_ = true;
+      stale_ = true;
+      emotion_ = "neutral";
+      valence_ = 0.0;
+      arousal_ = 0.2;
+      return;
+    }
+    if (sequence == last_sequence_) return;
+    last_sequence_ = sequence;
+    emotion_ = emotion;
+    valence_ = std::max(-1.0, std::min(1.0, valence));
+    arousal_ = std::max(0.0, std::min(1.0, arousal));
+    if (emotion != active_emotion_) cancellation_requested_ = true;
+  }
+
+  bool cancellation_requested() const { return cancellation_requested_; }
+  bool stale() const { return stale_; }
+  bool may_start_next_phase() const { return !cancellation_requested_; }
+  uint64_t last_sequence() const { return last_sequence_; }
+  const std::string& emotion() const { return emotion_; }
+  double valence() const { return valence_; }
+  double arousal() const { return arousal_; }
+
+ private:
+  std::string active_emotion_;
+  uint64_t last_sequence_{0};
+  bool cancellation_requested_{false};
+  bool stale_{false};
+  std::string emotion_;
+  double valence_{0.0};
+  double arousal_{0.2};
 };
 
 struct GazeboKeyframe {
@@ -248,14 +351,24 @@ class ExpressionEngine {
     requested_ = emotion;
     valence_ = ClampExpression(valence, -1.0, 1.0);
     arousal_ = ClampExpression(arousal, 0.0, 1.0);
-    const std::string target = commissioned_.count(emotion) ? emotion : "neutral";
-    if (target == desired_) return;  // Same-category updates never restart.
+    const std::string target =
+        ResolvePhysicalProfile(emotion, commissioned_).resolved_emotion;
+    if (target == desired_) {
+      // Two requested categories may intentionally resolve to one physical
+      // profile. Keep the newest request observable without restarting motion.
+      if (phase_ == "neutral_return" || phase_ == "neutral_hold") {
+        pending_requested_ = emotion;
+      }
+      return;  // Same resolved-profile updates never restart.
+    }
     desired_ = target;
     if (phase_ == "neutral_return" || phase_ == "neutral_hold") {
       pending_ = target;  // Rapid retargeting never restarts the reset.
+      pending_requested_ = emotion;
       return;
     }
     pending_ = target;
+    pending_requested_ = emotion;
     BeginReturn(now);
   }
 
@@ -263,6 +376,7 @@ class ExpressionEngine {
     requested_ = "neutral";
     desired_ = "neutral";
     pending_ = "neutral";
+    pending_requested_ = "neutral";
     stale_ = true;
     if (phase_ != "neutral_return" && phase_ != "neutral_hold") BeginReturn(now);
   }
@@ -280,9 +394,10 @@ class ExpressionEngine {
     requested_ = emotion;
     valence_ = ClampExpression(valence, -1.0, 1.0);
     arousal_ = ClampExpression(arousal, 0.0, 1.0);
-    desired_ = commissioned_.count(emotion) ? emotion : "neutral";
+    desired_ = ResolvePhysicalProfile(emotion, commissioned_).resolved_emotion;
     active_ = desired_;
     pending_.clear();
+    pending_requested_.clear();
     phase_ = "profile";
     phase_started_ = now;
     return_start_ = {};
@@ -310,6 +425,7 @@ class ExpressionEngine {
       if (now - phase_started_ < kNeutralHoldSeconds) return last_;
       active_ = pending_.empty() ? desired_ : pending_;
       pending_.clear();
+      pending_requested_.clear();
       phase_ = "profile";
       phase_started_ += kNeutralHoldSeconds;
       reset_complete_ = stale_;
@@ -334,7 +450,18 @@ class ExpressionEngine {
   const std::string& requested() const { return requested_; }
   const std::string& active() const { return active_; }
   const std::string& pending() const { return pending_; }
+  const std::string& pending_requested() const { return pending_requested_; }
   const std::string& phase() const { return phase_; }
+  PhysicalProfileResolution requested_resolution() const {
+    return ResolvePhysicalProfile(requested_, commissioned_);
+  }
+  PhysicalProfileResolution active_resolution() const {
+    return ResolvePhysicalProfile(active_, commissioned_);
+  }
+  PhysicalProfileResolution pending_resolution() const {
+    return ResolvePhysicalProfile(pending_.empty() ? desired_ : pending_,
+                                  commissioned_);
+  }
   uint64_t profile_cycle() const { return profile_cycle_; }
   bool stale_reset_complete() const { return reset_complete_; }
   double valence() const { return valence_; }
@@ -385,6 +512,7 @@ class ExpressionEngine {
   std::string desired_{"neutral"};
   std::string active_{"neutral"};
   std::string pending_;
+  std::string pending_requested_;
   std::string phase_{"profile"};
   double phase_started_{0.0};
   double valence_{0.0};

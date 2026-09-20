@@ -5,7 +5,7 @@
 [Previous: Curiosity](TICKET_CURIOSITY.md) ·
 [Next: Disgust](TICKET_DISGUST.md)
 
-## Status — planted bow accepted; normal chat integration pending
+## Status — planted bow accepted and validated through normal physical state
 
 The six-second paw path and a separate planted visual path are implemented in
 the official continuous MotionSDK runner. The paw candidate failed front-left
@@ -16,8 +16,11 @@ bowed. A 70 mm front-to-rear bow was visibly too deep and tripped the hard
 the animated phases. The 56 mm midpoint also reached `10.005 deg` during its
 sink. The final front-only 48 mm bow removed rear extension, passed a single
 physical run, and was visually accepted by the operator. A bounded two-cycle
-`15.6 s` repeat also passed. Normal chat selection remains pending, so the
-normal allowlist stays `neutral`.
+`15.6 s` repeat also passed. The continuous runner now selects this final bow
+for allowlisted Sadness. Its normal physical selection and a mid-loop
+Sadness-to-Neutral exact-canonical retarget passed on 2026-09-20. The global
+allowlist remains `neutral` until the cross-emotion integration ticket's
+remaining sweep is complete.
 
 ## Goal and emotional read
 
@@ -95,8 +98,8 @@ STOP and safety faults retain immediate verified release behavior.
 - [ ] Rework and pass the optional withdrawn-paw unload gate before enabling
   that variant.
 - [x] Obtain operator acceptance as sadness, distinct from neutral breathing.
-- [ ] Select the accepted planted bow from normal validated `sadness` state and
-  live-test retargeting before changing the allowlist, as tracked by the
+- [x] Select the accepted planted bow from normal validated `sadness` state.
+- [x] Live-test normal selection and exact-neutral retargeting, as tracked by the
   [chat-driven physical emotion integration ticket](TICKET_PHYSICAL_EMOTION_CHAT.md).
 
 ## Acceptance criteria
@@ -183,3 +186,19 @@ fresh samples in `74.994 ms`. Maximum feedback age/update gap was
 `147.213/147.911 ms`; no safety fault occurred. Fresh postflight was `1/0/0`,
 battery `39%`, errors zero, STOP false, four supports, status cycle `2`, and no
 owner.
+
+## Normal chat integration evidence — 2026-09-20
+
+The normal validated Sadness state selected the accepted front-only 48 mm bow
+and completed its full sink, heave, hold, and exact recovery with four supports
+under the continuous owner. During a later loop, a Neutral state was received;
+the runner cancelled the remaining repeat, returned to canonical stand over
+1.5 seconds, held exact neutral for 0.35 seconds, and continued Neutral without
+releasing or reacquiring MotionSDK. No support, state, STOP, tracking, feedback,
+or ownership gate failed.
+
+In a separate physical session with a valid 716-sample, `123.592 N` baseline,
+Fear was requested during an active Sadness loop. Sadness cancelled the
+remaining repeat, recovered to canonical stand over 1.5 seconds, held exact
+neutral for 0.35 seconds, and then started Fear directly with four supports.
+This completes the live Sadness-to-another-accepted-reaction retarget gate.

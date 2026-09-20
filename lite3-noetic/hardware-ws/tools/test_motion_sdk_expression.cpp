@@ -28,6 +28,41 @@ int main() {
     assert(profiles.count(name) == 1);
   }
 
+  // The normal selector is explicit and independent of compiled prototypes.
+  // Only operator-accepted final reactions may resolve away from neutral.
+  const auto& routing = PhysicalProfileTable();
+  assert(routing.size() == 9);
+  const std::set<std::string> completed{
+      "neutral", "joy", "sadness", "fear", "anger"};
+  const std::map<std::string, std::string> accepted_profiles{
+      {"neutral", "neutral_animal_breath"},
+      {"joy", "joy_alternating_front_paws_50mm"},
+      {"sadness", "sadness_front_bow_48mm"},
+      {"fear", "fear_planted_flinch_cower"},
+      {"anger", "anger_canonical_paw_placements"},
+  };
+  for (const auto& item : routing) {
+    const PhysicalProfileResolution resolution =
+        ResolvePhysicalProfile(item.requested_emotion, completed);
+    const auto accepted = accepted_profiles.find(item.requested_emotion);
+    if (accepted != accepted_profiles.end()) {
+      assert(!resolution.fallback);
+      assert(resolution.resolved_emotion == item.requested_emotion);
+      assert(resolution.profile == accepted->second);
+      assert(resolution.fallback_reason.empty());
+    } else {
+      assert(resolution.fallback);
+      assert(resolution.resolved_emotion == "neutral");
+      assert(resolution.profile == "neutral_animal_breath");
+      assert(resolution.fallback_reason ==
+             "physical_reaction_not_accepted");
+    }
+  }
+  const PhysicalProfileResolution gated_joy =
+      ResolvePhysicalProfile("joy", {"neutral"});
+  assert(gated_joy.fallback);
+  assert(gated_joy.fallback_reason == "not_enabled_in_normal_allowlist");
+
   // The commissioned neutral is byte-for-semantics equivalent to the proven
   // three-segment animal breath at endpoints and throughout the cycle.
   for (int index = 0; index <= 3250; ++index) {
@@ -159,5 +194,61 @@ int main() {
   neutral_only.Request("joy", 1.0, 1.0, 0.1);
   neutral_only.Sample(2.0);
   assert(neutral_only.active() == "neutral");
+  assert(neutral_only.requested() == "joy");
+  assert(neutral_only.requested_resolution().fallback);
+
+  // Unsupported -> unsupported changes remain truthful in status but create
+  // no needless reset because both requests resolve to the same neutral loop.
+  ExpressionEngine fallbacks(completed);
+  fallbacks.Sample(0.0);
+  fallbacks.Request("affection", 0.8, 0.4, 0.1);
+  assert(fallbacks.requested() == "affection");
+  assert(fallbacks.active() == "neutral");
+  assert(fallbacks.phase() == "profile");
+  fallbacks.Request("curiosity", 0.4, 0.7, 0.2);
+  assert(fallbacks.requested() == "curiosity");
+  assert(fallbacks.active() == "neutral");
+  assert(fallbacks.phase() == "profile");
+
+  // During one neutral reset, rapid accepted -> unsupported -> accepted
+  // retargeting keeps only the newest resolved request.
+  ExpressionEngine rapid(completed);
+  rapid.Request("joy", 0.8, 0.9, 0.0);
+  rapid.Request("surprise", 0.5, 1.0, 0.2);
+  assert(rapid.pending() == "neutral");
+  assert(rapid.pending_requested() == "surprise");
+  rapid.Request("fear", -0.8, 0.9, 0.3);
+  assert(rapid.pending() == "fear");
+  assert(rapid.pending_requested() == "fear");
+  rapid.Sample(ExpressionEngine::kNeutralReturnSeconds);
+  rapid.Sample(ExpressionEngine::kNeutralReturnSeconds +
+               ExpressionEngine::kNeutralHoldSeconds + 0.001);
+  assert(rapid.active() == "fear");
+  assert(rapid.requested() == "fear");
+
+  // Every multi-phase runtime uses the same newest-request latch. A category
+  // change in any named phase suppresses the next phase; later requests replace
+  // the pending target without clearing cancellation.
+  const std::vector<std::string> phases{
+      "joy_transfer_left", "joy_lift_left", "joy_hold_left",
+      "joy_lower_left", "joy_settle_left", "joy_transfer_right",
+      "joy_lift_right", "joy_hold_right", "joy_lower_right",
+      "joy_settle_right", "sadness_sink", "sadness_settle",
+      "sadness_sob_rise", "sadness_sob_fall", "sadness_hold",
+      "sadness_recover", "fear_flinch", "fear_recoil",
+      "fear_cower", "fear_freeze", "fear_recover"};
+  uint64_t sequence = 100;
+  for (const auto& phase : phases) {
+    (void)phase;
+    const std::string active = phase.find("joy_") == 0 ? "joy" :
+        (phase.find("sadness_") == 0 ? "sadness" : "fear");
+    EmotionRetargetTracker tracker(active, sequence);
+    tracker.Observe(true, true, ++sequence, "anger", -0.7, 0.9);
+    assert(tracker.cancellation_requested());
+    assert(!tracker.may_start_next_phase());
+    tracker.Observe(true, true, ++sequence, "affection", 0.7, 0.4);
+    assert(tracker.emotion() == "affection");
+    assert(tracker.last_sequence() == sequence);
+  }
   return 0;
 }
