@@ -1,0 +1,22 @@
+\begin{tikzpicture}[node distance=14mm and 18mm]
+  \node[box,text width=31mm] (disarmed) {\textbf{DISARMED}\\no SDK owner};
+  \node[process,right=of disarmed,text width=31mm] (armed) {\textbf{POSTURE ARMED}\\preflight passed};
+  \node[physical,right=of armed,text width=31mm] (pending) {\textbf{ACTION PENDING}\\fresh request};
+
+  \node[physical,below=of pending,text width=31mm] (takeover) {\textbf{SDK TAKEOVER}\\stand once};
+  \node[safety,left=of takeover,text width=31mm] (active) {\textbf{ACTION ACTIVE}\\bounded profile};
+  \node[process,below=of active,text width=31mm] (recovery) {\textbf{RECOVERY}\\canonical neutral};
+  \node[danger,below=of disarmed,text width=31mm] (fault) {\textbf{FAULT}\\hold + release};
+
+  \draw[flow] (disarmed) -- node[above,font=\scriptsize]{state 1 + preflight} (armed);
+  \draw[flow] (armed) -- node[above,font=\scriptsize]{authorize} (pending);
+  \draw[flow] (pending) -- node[right,font=\scriptsize]{operator start} (takeover);
+  \draw[flow] (takeover) -- node[above,font=\scriptsize]{ownership acquired} (active);
+  \draw[flow] (active) -- node[right,font=\scriptsize]{change / stale link} (recovery);
+  \draw[flow] (recovery.east) to[bend right=28]
+    node[right,font=\scriptsize,fill=white,inner sep=1pt]{newest accepted target} (active.south east);
+  \draw[flow] (recovery.west) -| node[pos=0.25,below,font=\scriptsize]{settle + release} (disarmed.south);
+  \draw[dashedflow] (active.west) --
+    node[above,sloped,font=\scriptsize,fill=white,inner sep=1pt]{STOP / hard fault} (fault.east);
+  \draw[flow] (fault) -- (disarmed);
+\end{tikzpicture}

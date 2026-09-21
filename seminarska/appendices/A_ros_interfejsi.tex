@@ -1,0 +1,71 @@
+\chapter{ROS topics, services и договори}
+\label{app:ros}
+
+Симулациските интерфејси се систематизирани во
+\cref{tab:ros-interfaces}, а одделниот физички namespace е прикажан во
+\cref{tab:hardware-interfaces}.
+
+\begingroup
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{longtable}{@{}L{0.36\textwidth}L{0.22\textwidth}L{0.36\textwidth}@{}}
+\caption{Главни симулациски ROS интерфејси}\label{tab:ros-interfaces}\\
+\toprule
+\textbf{Име} & \textbf{Тип} & \textbf{Значење} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Име} & \textbf{Тип} & \textbf{Значење} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\code{/emotion\_bot/chat/input} & \code{std\_msgs/String} & Plain text или JSON со turn ID. \\
+\code{/emotion\_bot/chat/cancel} & \code{std\_msgs/String} & Откажување на активен turn. \\
+\code{/emotion\_bot/chat/events} & \code{std\_msgs/String} & Lifecycle/stream JSON events. \\
+\code{/emotion\_bot/chat/response} & \code{std\_msgs/String} & Финален turn-correlated response. \\
+\code{/emotion\_bot/conversation/events} & \code{std\_msgs/String} & Semantic accepted/completed feed за EmotionEngine. \\
+\code{/emotion\_bot/input} & \code{std\_msgs/String} & Compatibility text или \code{event:<emotion>}. \\
+\code{/emotion\_bot/state} & \code{std\_msgs/String} & Latched JSON emotion-state 1.1. \\
+\code{/emotion\_bot/response} & \code{std\_msgs/String} & Compatibility local response. \\
+\code{/emotion\_bot/expression\_cmd} & \code{geometry\_msgs/Twist} & Height/roll/pitch expression intention. \\
+\code{/emotion\_bot/expression\_action} & \code{std\_msgs/String} & Generation-aware hop/stomp start/cancel. \\
+\code{/emotion\_bot/safe\_cmd} & \code{geometry\_msgs/Twist} & Избрана и clamped inspectable намера. \\
+\code{/emotion\_bot/manual\_joy} & \code{sensor\_msgs/Joy} & Manual arbitration input. \\
+\code{/emotion\_bot/joy\_out} & \code{sensor\_msgs/Joy} & Единствен simulator-controller input. \\
+\code{/emotion\_bot/status} & \code{std\_msgs/String} & Latched readiness/arbitration/safety JSON. \\
+\code{/emotion\_bot/sim\_controller\_ready} & \code{std\_msgs/Bool} & Internal controller readiness. \\
+\code{/lite3\_gazebo/joint\_states} & \code{sensor\_msgs/JointState} & 12-joint Gazebo state. \\
+\code{/emotion\_bot/set\_motion\_enabled} & \code{std\_srvs/SetBool} & Enable по readiness или immediate disable/zero. \\
+\end{longtable}
+\endgroup
+
+\begin{table}[htbp]
+\centering
+\caption{Главни одделни hardware интерфејси}
+\label{tab:hardware-interfaces}
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabularx}{\textwidth}{@{}L{0.38\textwidth}L{0.22\textwidth}Y@{}}
+\toprule
+\textbf{Име} & \textbf{Тип} & \textbf{Улога} \\
+\midrule
+\code{/emotion\_bot/hardware/expression\_status} & \code{std\_msgs/String} & Read-only schema 1.0: requested/resolved/active profile, phase, contact, ownership, fault и release. \\
+\code{/emotion\_bot/hardware/status} & \code{std\_msgs/String} & Legacy diagnostic supervisor status; official runner не се армира преку него. \\
+\code{/emotion\_bot/hardware/robot\_state} & custom \code{RobotState} & Validated state/error/battery/attitude evidence. \\
+\code{/emotion\_bot/hardware/wire\_command} & \code{std\_msgs/String} & Пасивно забележан diagnostic packet; не докажува execution. \\
+\code{/emotion\_bot/hardware/set\_armed} & \code{std\_srvs/SetBool} & Fail-closed legacy diagnostic arming service. \\
+\code{/emotion\_bot/hardware/neutral} & \code{std\_srvs/Trigger} & Legacy diagnostic exact-neutral request. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Contract summary}
+
+Conversation 1.0 разликува \code{accepted}, \code{started}, \code{delta},
+\code{retrying}, \code{offline\_fallback}, \code{completed},
+\code{cancelled} и \code{error}. Emotion-state 1.1 содржи sequence, ROS stamp,
+turn ID, source, backend, valence, arousal и category. Expression-action 1.0
+содржи generation, occurrence ID, action и start/cancel kind. Hardware
+transport 1.0 додава session и monotonic transport sequence, без да ја менува
+внатрешната state 1.1 содржина.

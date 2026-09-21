@@ -1,0 +1,37 @@
+\begingroup
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+\setlength{\LTleft}{0pt}
+\setlength{\LTright}{0pt}
+\begin{longtable}{@{}L{0.18\textwidth}L{0.11\textwidth}L{0.18\textwidth}L{0.29\textwidth}L{0.18\textwidth}@{}}
+\caption{Evidence matrix за референтниот snapshot}\label{tab:evidence-matrix}\\
+\toprule
+\textbf{Компонента} & \textbf{Тип} & \textbf{Тест/команда} & \textbf{Средина и резултат} & \textbf{Датум/ограничување} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Компонента} & \textbf{Тип} & \textbf{Тест/команда} & \textbf{Средина и резултат} & \textbf{Датум/ограничување} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+Release catkin build & офлајн & \code{emotion-clean-build} & Ubuntu 20.04/Noetic Docker; поминат со постојни upstream warnings & 2026-09-20; Lite3\_VMC \code{785a384} \\
+Python unit suites & офлајн & \code{emotion-unit-tests} & Noetic container; 58 тестови поминати & 2026-09-20; без physical claim \\
+C++ trajectories & офлајн & controller test binary & Noetic container; 5 тестови поминати & 2026-09-20; simulation mechanics \\
+OpenAI process boundary & офлајн & \code{emotion-openai-}\allowbreak\code{bridge-test} & Python 3.12 sidecar + Noetic client; 1 тест, без key/network & 2026-09-20 \\
+ROS contracts/ordering & офлајн ROS & \code{emotion-ros-tests} & ROS master/container; 1 suite, 0 failures/errors & 2026-09-20 \\
+Gazebo profiles & симулација & два headless sweeps & Gazebo/13 controllers; сите 9 profiles и 12 joints & 2026-09-20; не е hardware \\
+No-hardware boundary & инспекција и тест & Gazebo E2E & Docker network/process scan; без real executable/robot UDP & 2026-09-20 \\
+Hardware offline gate & офлајн & \code{verify-hardware-}\allowbreak\code{offline} & Hardware catkin container; 9 native suites, 29 Python tests, build/integration pass & 2026-09-20; не е commissioning \\
+aarch64 runner & build/native & clean ARM build и suites & Perception computer, official SDK; 9 suites pass, binaries installed & 2026-09-20; installation не е motion \\
+Neutral breathing & физичко и визуелно & continuous runner & Physical Lite3; 27 cycles at handoff, прифатено & 2026-09-20; exact tested setup \\
+Joy profile & физичко и визуелно & 5 s paw suite + chat loops & Physical Lite3; unload/landing на двете paws, прифатено & 2026-09-20; latest recovery не е live revalidated \\
+Sadness profile & физичко и визуелно & single + 2-cycle bow & Physical Lite3; four supports, прифатено & 2026-09-20; paw variant withdrawn \\
+Fear profile & физичко и визуелно & 3 planted cycles & Physical Lite3; 15 s, clean release, прифатено & 2026-09-20; paw variant rejected \\
+Anger profile & физичко и визуелно & 3-cycle reset suite & Physical Lite3; 6 placements, four-foot landings & 2026-09-20; latest recovery не е live revalidated \\
+Exact-neutral retarget & физичко & normal chat transitions & Physical Lite3; accepted/fallback retargets pass & 2026-09-20; consolidated verdict pending \\
+Battery interlock & физичко fail-safe & 75\% session floor & Physical Lite3; release на 74\%, без owner leak & 2026-09-20; намерен abort \\
+Joy persistent recovery & deploy и offline & full gate + ARM deploy & Container + perception computer; pass, SHA prefix \code{aa449b} & 2026-09-20; без последователно motion \\
+Anger persistent recovery & deploy и offline & full gate + ARM deploy & Container + perception computer; pass, SHA prefix \code{e72a2d} & 2026-09-20; без последователно motion \\
+\end{longtable}
+\endgroup

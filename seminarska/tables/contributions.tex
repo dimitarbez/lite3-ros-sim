@@ -1,0 +1,22 @@
+\begin{table}[htbp]
+\centering
+\caption{Разграничување на upstream основата и проектниот придонес}
+\label{tab:contributions}
+\small
+\begin{tabularx}{\textwidth}{L{0.28\textwidth}YY}
+\toprule
+\textbf{Компонента} & \textbf{Потекло} & \textbf{Статус во проектот} \\
+\midrule
+Lite3 Gazebo модел, основни controllers и keyboard & DEEP Robotics Lite3\_VMC & Преземена upstream основа; зачувана baseline споредба. \\
+Emotion appraisal, personality и memory & EmotionBot, GPL-3.0 & Преземена domain основа; додаден reusable headless EmotionEngine. \\
+ROS Noetic Docker/WSL workflow & проектен придонес & Wrapper images, lifecycle, Make targets и docs. \\
+\code{emotion\_bot\_ros} & проектен придонес & Contracts, adapters, chat coordinator, mapper, safety bridge и tests. \\
+OpenAI sidecar & проектен придонес & Python 3.12 process boundary, stream/fallback/cancellation и secret isolation. \\
+Controller expression actions & проектна измена во fork & Bounded hop/stomp, cancellation/recovery и C++ tests. \\
+Split-host hardware workspace & проектен придонес & Passive telemetry, STOP relay, shared state, services и fail-closed diagnostic graph. \\
+MotionSDK expression runner & проектен придонес врз official SDK & Exclusive owner, stand sequence, profiles, contact/feedback gates и status. \\
+Physical profiles/tickets & проектен придонес & Neutral/Joy/Sadness/Fear/Anger acceptance и четири planned profiles. \\
+Verification records & проектен придонес & Dated evidence, failure history и reproducibility boundary. \\
+\bottomrule
+\end{tabularx}
+\end{table}

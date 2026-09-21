@@ -1,0 +1,77 @@
+\chapter{Статусни и доказни табели}
+\label{app:status}
+
+\Cref{tab:consolidated-status} го сумира статусот по категорија,
+\cref{tab:gates} ги групира физичките gates, а \cref{tab:repos} ги наведува
+репозиториумите и проверените верзии.
+
+\section{Девет категории}
+
+\begin{table}[htbp]
+\centering
+\caption{Консолидиран статус: симулација наспроти физички робот}
+\label{tab:consolidated-status}
+\small
+\begin{tabularx}{\textwidth}{L{0.14\textwidth}L{0.25\textwidth}YL{0.22\textwidth}}
+\toprule
+\textbf{Емоција} & \textbf{Gazebo} & \textbf{Physical Lite3} & \textbf{Default normal path} \\
+\midrule
+Neutral & profile + two-loop evidence & accepted breathing & Enabled \\
+Joy & hop + body loop & accepted paw gesture; latest recovery live-unvalidated & Fallback unless explicitly allowlisted \\
+Sadness & deep bow/sway & accepted planted bow & Fallback unless explicitly allowlisted \\
+Anger & stomp + tense loop & accepted placements; latest recovery live-unvalidated & Fallback unless explicitly allowlisted \\
+Fear & recoil/crouch/tremble & accepted planted flinch/cower & Fallback unless explicitly allowlisted \\
+Surprise & hop + alert loop & no accepted profile & Neutral fallback \\
+Disgust & down-and-away recoil & no accepted profile & Neutral fallback \\
+Curiosity & alternating tilts & no accepted profile & Neutral fallback \\
+Affection & slow warm sway & no accepted profile & Neutral fallback \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Безбедносни gates}
+
+\begin{table}[htbp]
+\centering
+\caption{Физички gates и реакција при неуспех}
+\label{tab:gates}
+\small
+\begin{tabularx}{\textwidth}{L{0.25\textwidth}YL{0.31\textwidth}}
+\toprule
+\textbf{Gate} & \textbf{Услов} & \textbf{Реакција} \\
+\midrule
+Initial state & exact basic state 1, gait/motion 0/0 & Reject пред Sender construction. \\
+Ownership & без друг official/legacy owner & Reject; никогаш два senders. \\
+State/error & fresh state, без error; state 8 forbidden & Immediate hold/release, без retry. \\
+Feedback & pause над 100 ms; dead над 250 ms & Freeze/resume по 20 fresh frames или release. \\
+Tracking & commanded-vs-measured error во bound & Immediate release при violation. \\
+Attitude & roll/pitch во $\pm10^{\circ}$ & Immediate release. \\
+Battery & над session floor & Immediate release под floor. \\
+STOP/manual health & authenticated fresh observer, STOP false & Immediate release при STOP/stale observer. \\
+Contact baseline & finite, stable, plausible four-foot load & Lift забранет ако baseline е invalid. \\
+Unload/support & target unloaded; $\ge2$ strong supports; $\ge70$ N aggregate & Lower/recover; commissioning failure. \\
+Landing & target landed и 4 supports restored & Не започнува следна paw/емоција. \\
+Emotion link & fresh sequence-valid state & Canonical reset, потоа release ако остане stale. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Git repositories}
+
+\begin{table}[htbp]
+\centering
+\caption{Репозиториуми, гранки и commits}
+\label{tab:repos}
+\small
+\begin{tabularx}{\textwidth}{L{0.21\textwidth}YL{0.18\textwidth}}
+\toprule
+\textbf{Репозиториум} & \textbf{URL и гранка} & \textbf{Commit} \\
+\midrule
+Wrapper & \repo{https://github.com/dimitarbez/lite3-ros-sim/tree/feature/emotion-robot-integration} & prefix \code{c41f26ef} \\
+EmotionBot & \repo{https://github.com/dimitarbez/emotion-bot/tree/feature/emotion-robot-integration} & prefix \code{f267d285} \\
+Lite3\_VMC fork & \repo{https://github.com/dimitarbez/Lite3_VMC/tree/feature/emotion-robot-integration} & prefix \code{785a3846} \\
+Upstream Lite3\_VMC & \repo{https://github.com/DeepRoboticsLab/Lite3_VMC} & local prefix \code{724aa54d} \\
+MotionSDK & \repo{https://github.com/DeepRoboticsLab/Lite3_MotionSDK} & official upstream; robot checkout separately recorded \\
+\bottomrule
+\end{tabularx}
+\end{table}

@@ -1,0 +1,24 @@
+\begin{table}[htbp]
+\centering
+\caption{Избрани неуспешни или делумни експерименти}
+\label{tab:failures}
+\small
+\begin{tabularx}{\textwidth}{L{0.22\textwidth}YY}
+\toprule
+\textbf{Случај} & \textbf{Набљудуван резултат} & \textbf{Научена лекција/статус} \\
+\midrule
+Три ROS height trials & Nonzero intent и делумна wire evidence, но нулто операторски забележано движење & Publication не е actuation; не се зголемува амплитуда без да се затвори ownership/acceptance границата. \\
+Auto-mode neutral height & $-156..+260$ packets, joint span 0.00084 rad, без значајно дишење & Mode switch не го направил малиот profile видлив. \\
+Periodic Retroid height & Whole-run span вклучувал mode transition; post-handshake periodic span само 0.0011444 rad & Measurement window мора да ја изолира активната фаза. \\
+Current-pose SDK takeover & Backward stepping и големи joint spans од микроскопски offsets & \code{RobotStateInit} не е current-pose acquisition; hard gate останува. \\
+Stale telemetry & Stand или expression запрел на old 100 ms rule & Двостепен pause/recovery 100/250 ms со 20 fresh frames. \\
+Joy/Sadness/Fear unload miss & Target paw задржал премногу load & Gate не се заобиколува; landing/recovery се довршуваат. \\
+Sadness deep bow & Pitch 10.006/10.005 degrees & Attitude gate правилно го прекинал unsafe candidate. \\
+Anger repeat & Третиот cycle relatch-ирал само три supports & Canonical support reset, без слабеење на gate. \\
+Battery floor & 75\% floor видел 74\% & Immediate release; подоцнежен 25\% run само со operator decision. \\
+OpenAI/DNS timeout & APIConnectionError и client timeout пред provider window & Explicit resolver и deadline derived from retry window; robot safety path останал независен. \\
+Gazebo clock stall & Longer idle sweep запрел во neutral simulated time & Runtime failure е евидентиран; не се претставува како animation pass. \\
+Visual mismatch & Безбедни Joy/Sadness/Fear прототипи не изгледале како емоцијата & Telemetry pass не е visual acceptance. \\
+\bottomrule
+\end{tabularx}
+\end{table}

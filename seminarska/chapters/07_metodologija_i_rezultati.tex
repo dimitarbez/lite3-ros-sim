@@ -1,0 +1,99 @@
+\chapter{Методологија за тестирање и резултати}
+\label{chap:results}
+
+\section{Доказна скала}
+
+За да не се изедначат source code, тест и физичко однесување, се користи
+следната доказна скала:
+
+\begin{enumerate}
+  \item \status{имплементирано} --- source/configuration постои и е
+  прегледана;
+  \item \status{unit/offline тестирано} --- deterministic тестот поминал без
+  hardware;
+  \item \status{потврдено во Gazebo} --- интегрираниот simulator graph покажал
+  мерливо и, кога е наведено, визуелно однесување;
+  \item \status{физички извршено} --- exact runner/profile бил извршен на
+  роботот со датирана телеметрија;
+  \item \status{визуелно прифатено} --- операторот го оценил движењето како
+  соодветна емоција;
+  \item \status{deployed/offline-tested, live-unvalidated} --- binary/source е
+  поставен и тестовите поминале, но новата behavior branch не е повторно
+  физички активирана; и
+  \item \status{планирано/неимплементирано}.
+\end{enumerate}
+
+Topic publication, wire packet, sent joint target или joint movement не се
+автоматски доказ за правилна емоционална реакција. Потребни се корелирани
+intent, transport, state, joints/IMU/contact, release и operator observation
+соодветни на тврдењето.
+
+\section{Симулациска методологија}
+
+Симулациската проверка се извршува во чист, единствен ROS/Gazebo graph. По
+Release build се стартува headless integrated launch, се чекаат controller
+readiness и prepared stance и се инјектираат exact \code{event:<emotion>}
+влезови. Се собираат:
+
+\begin{itemize}
+  \item conversation event и emotion-state со turn/sequence correlation;
+  \item expression command и generation-aware action;
+  \item safe command и final Joy transport;
+  \item model position, torso height/tilt и сите 12 joint positions;
+  \item foot contact topics, controller states и safety status; и
+  \item final zero command, residual speed и teardown markers.
+\end{itemize}
+
+Првиот sweep проверува entrance, rapid changes, manual arbitration, watchdog и
+no-hardware boundary. Вториот го задржува секој профил низ два idle cycles и
+проверува movement, 0.10 m containment, 0.05 rad joint margin, 0.30 rad HipX
+anti-splay, mirrored stomp, exact-neutral holds и отсуство на NaN/fall/error.
+Live visual claim бара блиска Gazebo камера покрај telemetry; headless бројките
+сами не докажуваат читливост.
+
+\section{Физичка методологија}
+
+Физичкиот preflight е read-only до моментот на одделна operator authorization.
+Се проверуваат model/software, exact initial state 1, gait/motion 0/0, zero
+errors, battery floor, attitude, fresh \code{0x0901}/\code{0x0906}, centered
+Retroid axes, STOP false, active passive services и отсуство на owner/runner.
+Потоа official runner извршува \cref{eq:official-sequence} и задржува единствен
+lease.
+
+За planted profile се проверуваат joint bounds, tracking, attitude, state,
+feedback и final release. За lifted paw дополнително се воспоставува
+distinct-tick baseline, се проверуваат unload, non-target support, landing и
+four-foot relatch. Miss не се „поправа“ со повисока амплитуда: paw се спушта,
+се прави recovery, а исходот се заведува како failure или строго дефиниран
+recoverable contact miss.
+
+Визуелната евалуација е намерно одвоена. Операторот оценува дали motion reads as
+Neutral/Joy/Sadness/Fear/Anger. Таа оценка не може да поништи safety gate, но е
+неопходна за профилот да се нарече емоционално прифатен.
+
+\section{Evidence matrix}
+
+\Cref{tab:evidence-matrix} ги сумира најважните резултати. Сите project-row
+резултати се од 20 септември 2026 година и од commit-ите наведени во изјавата
+за опфат, освен каде што самиот датиран record јасно означува претходна
+working-tree основа. Во таков случај record-от е историски доказ, а референтниот
+snapshot ја содржи финалната документирана состојба.
+
+\input{tables/evidence_matrix}
+
+\section{Толкување на резултатите}
+
+Резултатите поддржуваат четири заклучоци. Прво, архитектурното разделување е
+функционално: истиот EmotionEngine и state contract ги хранат Gazebo и
+hardware resolver-от, без simulator command да стане hardware command. Второ,
+сите девет категории се изразливи и автоматски проверливи во Gazebo. Трето,
+пет категории имаат физички и визуелно прифатени реакции, но целата normal
+configuration намерно останува Neutral-only. Четврто, contact gates и
+transition contract не се формалност: токму тие откриле support redistribution,
+unload misses, unsafe takeover и attitude/battery boundaries.
+
+Постојат и важни негативни резултати. High-level height path не докажал
+значајно periodic motion; првите Joy/Sadness/Fear candidates не ја пренесувале
+саканата емоција; Anger endurance и recovery policies откриле реални пропусти.
+Вклучувањето на овие резултати ја подобрува репродуцибилноста и спречува
+погрешна генерализација.

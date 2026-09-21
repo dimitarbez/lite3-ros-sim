@@ -1,0 +1,135 @@
+\chapter{Репродуцибилност, придонес и заклучок}
+\label{chap:conclusion}
+
+\section{Клонирање и pinned верзии}
+
+Референтниот snapshot се добива со:
+
+\begin{lstlisting}[language=bash,caption={Клонирање на јавната feature гранка со submodules},label={lst:clone}]
+git clone --recurse-submodules \
+  --branch feature/emotion-robot-integration \
+  https://github.com/dimitarbez/lite3-ros-sim.git ROS
+cd ROS
+git rev-parse HEAD
+git submodule status
+\end{lstlisting}
+
+Очекуваните SHA-вредности се wrapper
+\code{c41f26ef4414e5c9a474}\allowbreak\code{8f3c88aee33820526c01}, EmotionBot
+\code{f267d28552bbf46f30a2}\allowbreak\code{63bb291e71ab91a2b91b} и Lite3\_VMC
+\code{785a3846ec2c44a03806}\allowbreak\code{18490f837786b3250f76}. Тие се проверуваат пред
+build, бидејќи branch head може подоцна да се помести. \code{git status} се
+проверува посебно во wrapper-от и во секој nested repository. Не се извршува
+\code{bootstrap} врз неразгледана dirty/detached работа.
+
+\section{Build и симулација}
+
+Од workspace root:
+
+\begin{lstlisting}[language=bash,caption={Репродуцибилен setup и offline simulation}]
+make -C lite3-noetic build
+make -C lite3-noetic start
+make -C lite3-noetic bootstrap
+
+# Терминал 1: цел интегриран offline graph
+make -C lite3-noetic run-emotion-sim
+
+# Терминал 2: интерактивен разговор
+make -C lite3-noetic run-emotion-chat
+\end{lstlisting}
+
+За live OpenAI се користи \code{run-emotion-sim-openai}; key се става во
+ignored, mode-600 \code{lite3-noetic/ws/Lite3\_VMC/.env}, никогаш во трудот
+или Git. Пред chat handoff се проверуваат четирите status flags. Ако watchdog
+ја одземе motion permission, се чека recovery и се користи service-от
+\code{/emotion\_bot/set\_motion\_enabled}; readiness не се bypass-ира.
+
+Безбедно завршување значи disable, Ctrl-C на chat/simulation и финална нулта
+команда. Ако ROS graph е stale или има XML-RPC refusal, се користи еден чист
+\code{make -C lite3-noetic restart}, а не паралелни graphs.
+
+\section{Verification команди}
+
+Главните offline gates се:
+
+\begin{lstlisting}[language=bash,caption={Repeatable verification targets}]
+make -C lite3-noetic verify-emotion
+make -C lite3-noetic verify-hardware-offline
+\end{lstlisting}
+
+Првиот target го проверува build-от, static/unit/process-boundary/ROS tests и
+двата Gazebo sweeps. Вториот го гради одделниот hardware workspace и ги
+проверува packet, mapping, contact, profile, ownership, release и watchdog
+механизмите без robot interfaces. \textbf{Ниту еден target не е доказ за
+physical commissioning.}
+
+Овој труд намерно не дава copy-paste процедура за физичко активирање. Таква
+операција бара одделна тековна авторизација, свеж преглед на hardware runbook и
+manuals, exact robot state, charged battery, clear area, physical restraint,
+STOP/operator readiness и потврда дека нема друг sender. Датираните команди во
+project docs се evidence records, а не standing permission.
+
+\section{Оригинален придонес и атрибуција}
+
+Разграничувањето во \cref{tab:contributions} е важно и авторски и лиценцно.
+Не е коректно upstream Lite3 controller, Gazebo model или EmotionBot logic да
+се припишат на авторот на интеграцијата. Оригиналниот придонес е во
+архитектурното поврзување, contracts, safety layers, test infrastructure,
+hardware runner, профилите и evidence discipline.
+
+\input{tables/contributions}
+
+EmotionBot GPL-3.0 notices мора да се зачуваат; пред копирање или vendoring се
+проверуваат redistribution implications. DEEP Robotics MotionSDK и Lite3\_VMC
+се користат како официјална upstream основа. API и simulator documentation се
+проверуваат во официјалните извори, а не во непроверени tutorials.
+
+\section{Идна работа}
+
+Најнепосредни задачи се:
+
+\begin{enumerate}
+  \item bounded physical revalidation на Joy и Anger persistent contact-miss
+  recovery, без промена на thresholds;
+  \item consolidated operator verdict за normal chat sweep и дури потоа
+  одлука дали checked-in allowlist да се прошири;
+  \item имплементација, native/aarch64 тестови, bounded physical telemetry и
+  visual acceptance за Affection, Curiosity, Disgust и Surprise;
+  \item формализирана multi-operator visual study со однапред дефинирани
+  критериуми, наместо само commissioning operator verdict;
+  \item независна contact sensing валидација на torque-derived estimator;
+  \item миграција од Gazebo Classic кон поддржан simulator без губење на
+  controller/telemetry acceptance tests; и
+  \item понатамошно докажување на STOP latency, battery policy и release
+  postures во точно дефинирани, restrained сесии.
+\end{enumerate}
+
+Airborne hop, locomotion, yaw и dynamic physical actions не се логичен „следен
+мал чекор“; тие се одделни commissioning проекти со нови flight/landing,
+balance и operator-risk барања.
+
+\section{Заклучок}
+
+Во трудот е прикажан целосен пат од разговорен input до симулиран и физички
+емоционален израз, со јасна граница меѓу reasoning и actuation. EmotionEngine
+обезбедува валентност, активација и девет категории. Versioned ROS contracts,
+turn ordering и OpenAI sidecar овозможуваат inspectable разговор без
+dependency/secret компромис во Noetic. Mapper-от и safety bridge-от ги
+претвораат категориите во девет центрирани Gazebo профили, а автоматизираните
+tests ги покриваат movement, transition, watchdog, zeroing и no-hardware
+boundary.
+
+Физичкиот систем користи поинаков, split-host пат со единствен MotionSDK owner,
+state/feedback/STOP/battery/attitude/tracking gates и torque-derived contact
+estimate. Neutral, Joy, Sadness, Fear и Anger имаат физички извршени и
+операторски прифатени реакции. Четирите преостанати категории искрено се
+прикажани како Neutral fallback. Последните Joy/Anger recovery корекции не се
+прогласени за физички потврдени само затоа што се deployed и offline-tested.
+
+Најважниот инженерски резултат не е само дека роботот се движи. Резултат е
+доказната дисциплина со која се разликува command од motion, motion од
+recognizable emotion и implementation од commissioning. Неуспешните height,
+takeover, contact, attitude, battery, DNS и clock експерименти директно го
+обликувале финалниот дизајн. Поради тоа проектот претставува сериозен,
+репродуцибилен и безбедносно ограничен проектен прототип, со јасно
+дефинирани граници за идно проширување.

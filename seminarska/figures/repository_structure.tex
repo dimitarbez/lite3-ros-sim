@@ -1,0 +1,28 @@
+\begin{tikzpicture}[node distance=11mm and 12mm]
+  \node[box,text width=45mm] (wrapper) {
+    \textbf{lite3-ros-sim}\\
+    wrapper, Docker, docs и tickets\\
+    \code{c41f26e}};
+
+  \node[process,below left=of wrapper,text width=39mm] (emotion) {
+    \textbf{emotion-bot}\\
+    headless EmotionEngine\\
+    \code{f267d28}};
+  \node[process,below=of wrapper,text width=39mm] (fork) {
+    \textbf{Lite3\_VMC fork}\\
+    controller + emotion\_bot\_ros\\
+    \code{785a384}};
+  \node[process,below right=of wrapper,text width=39mm] (upstream) {
+    \textbf{Lite3\_VMC upstream}\\
+    clean reference\\
+    \code{724aa54}};
+
+  \draw[flow] (wrapper.south west) -- node[left,font=\scriptsize]{gitlink} (emotion.north);
+  \draw[flow] (wrapper.south) -- node[right,font=\scriptsize]{gitlink} (fork.north);
+  \draw[flow] (wrapper.south east) -- node[right,font=\scriptsize]{gitlink} (upstream.north);
+  \coordinate (compareleft) at ($(fork.south)+(0,-5mm)$);
+  \coordinate (compareright) at (compareleft -| upstream.south);
+  \draw[dashedflow] (fork.south) -- (compareleft) -- (compareright) -- (upstream.south);
+  \node[below=1mm,font=\scriptsize,fill=white,inner sep=1.5pt]
+    at ($(compareleft)!0.5!(compareright)$) {само споредба; без развој};
+\end{tikzpicture}

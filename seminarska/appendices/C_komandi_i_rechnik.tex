@@ -1,0 +1,69 @@
+\chapter{Команди и речник на кратенки}
+\label{app:commands}
+
+\section{Основни безбедни команди}
+
+\begin{lstlisting}[language=bash,caption={Build, run и verification summary}]
+# setup
+make -C lite3-noetic build
+make -C lite3-noetic start
+make -C lite3-noetic bootstrap
+
+# offline simulation, во два терминала
+make -C lite3-noetic run-emotion-sim
+make -C lite3-noetic run-emotion-chat
+
+# optional live OpenAI simulation
+make -C lite3-noetic run-emotion-sim-openai
+
+# offline verification
+make -C lite3-noetic verify-emotion
+make -C lite3-noetic verify-hardware-offline
+
+# shutdown container по завршување
+make -C lite3-noetic stop
+\end{lstlisting}
+
+Physical setup/run targets намерно не се повторуваат како оперативен рецепт во
+овој прилог. Нивното присуство во repository Makefile не претставува дозвола
+за употреба. Пред физичка операција мора да се прочитаат тековните tickets,
+hardware runbook, app-control record и сите наведени manufacturer manuals, со
+fresh authorization и operator.
+
+\section{Краток речник}
+
+Термините што се задржани на English/Latin script се објаснети во
+\cref{tab:glossary}.
+
+\begin{longtable}{L{0.18\textwidth}L{0.74\textwidth}}
+\caption{Кратенки и технички термини}\label{tab:glossary}\\
+\toprule
+\textbf{Термин} & \textbf{Значење во трудот} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Термин} & \textbf{Значење во трудот} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+API & Application Programming Interface; програмски интерфејс. \\
+catkin & Build system за ROS 1 workspace. \\
+commissioning & Контролирано воведување и физичко прифаќање на точно дефиниран профил. \\
+feedback & Свежа измерена состојба што се користи за safety/tracking. \\
+fail-safe & Однесување што при дефект оди кон ограничена нула, hold или release. \\
+gate & Услов што мора да биде исполнет пред или за време на дејство. \\
+HRI & Human--Robot Interaction, интеракција човек--робот. \\
+IK & Inverse Kinematics, пресметка на joints од посакувана Cartesian pose. \\
+IMU & Inertial Measurement Unit; ориентација и аголна брзина. \\
+JSON/NDJSON & JavaScript Object Notation / newline-delimited JSON. \\
+joint & Актуиран зглоб; Lite3 има 12 контролирани leg joints. \\
+MotionSDK & Официјален DEEP Robotics интерфејс за joint-level control. \\
+ROS & Robot Operating System; middleware framework за robotics nodes. \\
+sidecar & Одделен процес/container што обезбедува OpenAI API boundary. \\
+STOP & Authenticated emergency/manual stop evidence со највисок приоритет. \\
+topic/service & ROS publish--subscribe канал / синхрон request--response интерфејс. \\
+torque & Проценет или измерен joint moment, употребен во contact estimator. \\
+watchdog & Тајмер/monitor што открива stale или dead input и активира recovery/release. \\
+WSL2/WSLg & Linux virtualization и GUI integration во Windows. \\
+\end{longtable}

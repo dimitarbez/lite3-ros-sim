@@ -1,0 +1,22 @@
+\begin{table}[htbp]
+\centering
+\caption{Користени технологии и нивната улога}
+\label{tab:technologies}
+\small
+\begin{tabularx}{\textwidth}{L{0.22\textwidth}YY}
+\toprule
+\textbf{Технологија} & \textbf{Улога} & \textbf{Граница/напомена} \\
+\midrule
+DEEP Robotics Lite3 & Физичка и симулациска четириножна платформа & Физичкиот robot path не се активира од симулациски target. \\
+ROS Noetic & Nodes, topics, services, параметри и orchestration & Работи во Ubuntu 20.04 Docker, не се инсталира на WSL host. \\
+Gazebo Classic & Динамичка симулација, joint/contact набљудување и визуелна проверка & Резултатите не се физичко commissioning evidence. \\
+Docker/WSL2 & Репродуцибилна Ubuntu 20.04 средина врз Ubuntu 24.04 WSL2 & GUI се прикажува преку WSLg. \\
+C++14/catkin & Lite3 controller, траектории и ROS build & Се задржува компатибилноста со upstream. \\
+Python 3.8 & ROS adapters, mapper, safety bridge и тестови & Noetic средината не го добива целосниот EmotionBot dependency set. \\
+Python 3.12 sidecar & OpenAI SDK и Responses streaming & Loopback-only; API key не влегува во ROS workspace. \\
+EmotionBot и EmotionEngine & Appraisal, personality, memory, valence, arousal и category & GPL-3.0; роботска кореографија не се сместува во овој репозиториум. \\
+MotionSDK & Единствен физички joint-command owner & Бара свеж feedback, state gates, STOP и детерминистички release. \\
+Git submodules & Pinned, репродуцибилни checkouts & Nested commit-и се објавуваат пред wrapper gitlinks. \\
+\bottomrule
+\end{tabularx}
+\end{table}

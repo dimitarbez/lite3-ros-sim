@@ -1,0 +1,22 @@
+\begin{tikzpicture}[node distance=10mm and 9mm]
+  \node[box,text width=29mm] (state) {Emotion state 1.1\\заеднички contract};
+  \node[process,above right=4mm and 13mm of state,text width=28mm] (map) {Twist mapper};
+  \node[safety,right=of map,text width=28mm] (safe) {simulation safety};
+  \node[process,right=of safe,text width=27mm] (joy) {Joy transport};
+  \node[process,right=of joy,text width=25mm] (gz) {Gazebo};
+  \node[font=\scriptsize\bfseries,above=2mm of map] {Симулација};
+  \draw[flow] (state.north east) -- (map.west);
+  \draw[flow] (map) -- (safe);
+  \draw[flow] (safe) -- (joy);
+  \draw[flow] (joy) -- (gz);
+
+  \node[physical,below right=4mm and 13mm of state,text width=28mm] (resolve) {profile resolver};
+  \node[safety,right=of resolve,text width=28mm] (gates) {robot/contact gates};
+  \node[physical,right=of gates,text width=27mm] (sdk) {12-joint SDK};
+  \node[physical,right=of sdk,text width=25mm] (hw) {Physical Lite3};
+  \node[font=\scriptsize\bfseries,below=2mm of resolve] {Физички робот};
+  \draw[flow] (state.south east) -- (resolve.west);
+  \draw[flow] (resolve) -- (gates);
+  \draw[flow] (gates) -- (sdk);
+  \draw[flow] (sdk) -- (hw);
+\end{tikzpicture}

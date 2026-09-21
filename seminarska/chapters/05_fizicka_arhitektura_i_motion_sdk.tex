@@ -1,0 +1,147 @@
+\chapter{Split-host физичка архитектура и MotionSDK}
+\label{chap:hardware}
+
+\section{Одделување на физичкиот пат}
+
+Физичката интеграција не е продолжение на Gazebo launch-от. Таа користи
+посебен catkin workspace на perception computer-от и не ги менува vendor
+\code{lite\_cog}, \code{qnx2ros}, \code{jy\_exe} или нивната конфигурација.
+Како што е прикажано на \cref{fig:split-host}, reasoning и OpenAI остануваат на
+развојниот компјутер, додека телеметријата, safety gates, trajectory generation
+и единствениот MotionSDK owner се на роботот.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{\input{figures/split_host}}
+\caption{Split-host физичка архитектура и насоки на податоците.}
+\label{fig:split-host}
+\end{figure}
+
+Development-side \code{hardware\_brain.launch} стартува само chat adapter,
+emotion adapter и hardware uplink. Uplink-от праќа NDJSON schema 1.0 кон
+\code{127.0.0.1:8767} преку експлицитен SSH local forward. Frame е до 2 KiB,
+има random session и strictly increasing transport sequence, а внатре ја носи
+неизменета emotion-state 1.1. На perception computer-от
+\code{emotion\_receiver.py} отфрла replay и malformed state.
+
+Симулацискиот и физичкиот пат се споредени во \cref{fig:path-comparison}.
+Нивна единствена заедничка actuator-near граница е валидираната емоционална
+состојба. Затоа \code{/emotion\_bot/joy\_out} и симулацискиот
+\code{safety\_bridge.py} не се користат на hardware.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{\input{figures/path_comparison}}
+\caption{Споредба на симулацискиот и физичкиот контролен пат.}
+\label{fig:path-comparison}
+\end{figure}
+
+\section{Телеметрија, STOP и ексклузивна сопственост}
+
+\code{telemetry\_tap.py} пасивно ги набљудува пакетите од motion host кон UDP
+43897. Проверениот Deeprcs 2.0.153 layout содржи 368-byte high-rate
+\code{0x0906} body: tick, IMU, 12 joints и contact block. Независниот
+\code{0x0901} state body има 200 bytes и се користи за basic state, gait/motion,
+battery и error flags. Само валидирани записи се објавуваат во sequence-locked
+shared memory.
+
+Motion-host STOP observer работи без ROS, пасивно го набљудува Retroid traffic
+и праќа HMAC-authenticated status до perception computer. Само tap-от и STOP
+observer-от добиваат \code{CAP\_NET\_RAW}; ROS core и runner остануваат
+непривилегирани. Stale relay ја отстранува arming дозволата.
+
+Во една operator-started сесија постои точно еден
+\code{motion\_sdk\_expression\_runner} на 1 kHz. Ownership marker и
+independent crash watchdog спречуваат втор sender. Retroid diagnostic bridge,
+legacy posture/action nodes и официјалниот runner се меѓусебно исклучиви.
+Expression status се враќа преку shared memory и read-only JSON schema 1.0 на
+\code{/emotion\_bot/hardware/expression\_status}.
+
+\section{Од high-level packets до директни joints}
+
+Раната истрага утврдила дека full Lite3 Android app испраќа 12-byte
+little-endian \code{<III>} commands кон motion host \code{192.168.2.1:43893}.
+Тоа не е generic Retroid port-12121 protocol. State-aware Stand/Sit е toggle и
+не смее слепо да се повторува. Потребни се heartbeats и fresh
+\code{robot\_basic\_state}.
+
+Три height-only обиди низ
+\code{/emotion\_bot/hardware/posture\_intent -> /simple\_cmd -> ros2qnx}
+не произвеле видливо движење. По serialization fix, nonzero height packets и
+точна zero recovery биле видливи на ROS и perception wire, но joint span бил
+само 0.00099 rad и операторот повторно пријавил нулто значајно движење. Auto
+mode neutral breathing исто дал само 0.00084 rad span. Ова докажало command
+publication и wire emission, но не \code{jy\_exe} acceptance.
+
+Подоцнежен direct Retroid-compatible high-level test ја репродуцирал exact
+sequence: четири heartbeats на 2 Hz, Move, 2.0 s, Pose, 1.5 s и потоа 50 Hz
+pairs од opaque yaw code \code{0x21010135}=32768 пред height
+\code{0x21010102}. Фиксна вредност $-10000$ дала 0.2484894 rad joint span, со
+state 6 и нулти errors. Тоа е доказ за bounded height actuation, но periodic
+profile не бил докажан како дишење; Retroid diagnostic останува одделен од
+официјалниот пат.
+
+\section{MotionSDK takeover и официјална секвенца}
+
+Официјалниот MotionSDK документира UDP communication, 12-joint order и
+контролно преземање. Критичен наод е
+дека \code{RobotStateInit()} не ја чита и не ја задржува моменталната поза. Тој
+ги reset-ира joints кон zero и презема control right. Затоа current-pose/ground
+takeover е небезбеден.
+
+Еден ground measured-hold обид предизвикал backward stepping и joint-error
+watchdog за приближно 125 ms. Друг „мал offset“ takeover ги засилил барањата од
+ред $10^{-5}$ rad во spans до 0.327/0.709/0.677 rad по joint families. Обидот е
+прекинат и \code{takeover\_transition\_commissioned=false} останал hard gate.
+Овие резултати се причина официјалниот пат да започнува само од exact basic
+state 1 и да ја користи vendor zero-to-stand секвенцата:
+
+\begin{equation}
+\begin{aligned}
+\texttt{RobotStateInit} &\rightarrow \texttt{PreStandUp}
+\rightarrow \texttt{StandUp} \\
+&\rightarrow \text{neutral hold}
+\rightarrow \text{expression} \rightarrow \texttt{ControlGet(ROBOT)}.
+\end{aligned}
+\label{eq:official-sequence}
+\end{equation}
+
+Секвенцата се извршува еднаш по сесија. Категориите се менуваат под ист owner;
+не се повторува stand и не се reacquire-ира SDK.
+
+\section{Feedback watchdog и hard interlocks}
+
+High-rate feedback age над 100 ms го замрзнува trajectory time и ја задржува
+последната валидирана position со нулти desired velocity и torque. Продолжување
+е дозволено по 20 свежи distinct frames со age до 20 ms. Dead feedback на
+250 ms, non-finite data, tracking violation, state 8 или nonzero error веднаш
+водат кон no-retry release. Attitude bound е $\pm10^{\circ}$, а battery floor
+е експлицитно конфигуриран за конкретна сесија.
+
+Важно е дека software STOP не е обична timeout recovery постапка. STOP,
+invalid state, tracking fault и други hard faults го заобиколуваат
+разговорниот 1.5+0.35 s transition contract и го активираат проверениот
+hold/release. Системот никогаш автоматски не reacquire-ира по release.
+
+\section{IK и torque-derived contact}
+
+Физичкиот ROS bridge нема mode-valid foot-contact topic, а MotionSDK contact
+array бил all-zero под SDK ownership. Затоа отворен foot lift не бил прифатен.
+Контактот се проценува од joint position и torque со
+
+\begin{equation}
+  J(q)^{T}F=\tau, \qquad F=(J(q)^{T})^{-1}\tau,
+  \label{eq:contact-estimator}
+\end{equation}
+
+при што vertical load е $\max(0,-F_z)$. Estimator-от отфрла non-finite,
+singular и implausible solutions, користи distinct ticks, filtering и
+consecutive-frame hysteresis. Recorded standing fixture дала
+23.44/24.34/31.23/35.73 N, вкупно 114.74 N, наспроти приближно 116.15 N за
+11.84 kg.
+
+За paw gesture се бара: valid four-foot baseline, target unload, најмалку два
+strong non-target supports над 5 N, најмалку 70 N aggregate non-target load,
+bounded IK lower, target landing и повторно четири supports. Contact
+confirmation не е замена за state, attitude, tracking, battery, STOP или
+feedback gates; сите мора истовремено да важат.

@@ -1,0 +1,21 @@
+\begin{tikzpicture}[node distance=9mm and 10mm]
+  \node[process,text width=25mm] (state) {state 1.1\\$v$, $a$, category};
+  \node[process,right=of state,text width=29mm] (mapper) {mapper 20 Hz\\filter + keyframes};
+  \node[safety,right=of mapper,text width=30mm] (safe) {safety bridge\\clamp + watchdog};
+  \node[process,right=of safe,text width=25mm] (joy) {\code{/joy\_out}\\Joy};
+  \node[process,right=of joy,text width=27mm] (ctrl) {Lite3 controller\\Gazebo};
+  \draw[flow] (state) -- (mapper);
+  \draw[flow] (mapper) -- node[above,font=\scriptsize]{Twist/action} (safe);
+  \draw[flow] (safe) -- (joy);
+  \draw[flow] (joy) -- (ctrl);
+  \node[process,below=of safe,text width=29mm] (manual) {manual Joy input\\0.75 s priority};
+  \draw[flow] (manual.north) -- node[right,font=\scriptsize]{arbitration} (safe.south);
+
+  \node[danger,above=of safe,text width=32mm] (health) {readiness + health\\freshness + bounds};
+  \draw[flow] (health.south) -- node[right,font=\scriptsize]{gates} (safe.north);
+
+  \node[process,above=of joy,text width=25mm] (status) {status JSON\\read-only};
+  \draw[dashedflow] (safe.north east) to[out=35,in=205]
+    node[below,sloped,font=\scriptsize,fill=white,inner sep=1pt]{publish}
+    (status.south west);
+\end{tikzpicture}

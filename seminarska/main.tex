@@ -1,0 +1,149 @@
+\documentclass[12pt,a4paper,oneside]{report}
+
+\usepackage[a4paper,margin=2.5cm,headheight=15pt]{geometry}
+\usepackage{fontspec}
+\defaultfontfeatures{Ligatures=TeX}
+\setmainfont{FreeSerif}
+\setsansfont{FreeSans}
+\setmonofont{FreeMono}[Scale=0.88]
+\usepackage{polyglossia}
+\setdefaultlanguage{macedonian}
+\setotherlanguage{english}
+\usepackage{microtype}
+\usepackage{setspace}
+\onehalfspacing
+\setlength{\emergencystretch}{2em}
+\sloppy
+\usepackage{parskip}
+\setlength{\parindent}{1.2em}
+\setlength{\parskip}{0.25em}
+
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{ragged2e}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{amsmath,amssymb}
+\usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,automata,backgrounds,calc,fit,positioning,shapes.geometric}
+
+\definecolor{academicblue}{HTML}{244A68}
+\definecolor{academiclight}{HTML}{EAF1F5}
+\definecolor{safegreen}{HTML}{2F6B4F}
+\definecolor{warnamber}{HTML}{A05A00}
+\definecolor{faultred}{HTML}{8E2E2E}
+\definecolor{codegray}{HTML}{F4F5F6}
+
+\usepackage{hyperref}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=academicblue,
+  citecolor=safegreen,
+  urlcolor=academicblue,
+  pdftitle={Симулациски ориентирана интеграција на емоционално однесување кај Lite3},
+  pdfauthor={Димитар Бежановски}
+}
+\usepackage[nameinlink,noabbrev]{cleveref}
+% cleveref has no Macedonian language module; keep custom Macedonian names
+% below while using its English conjunction rules as a stable fallback.
+\makeatletter
+\def\cref@language{english}
+\makeatother
+\crefname{figure}{слика}{слики}
+\Crefname{figure}{Слика}{Слики}
+\crefname{table}{табела}{табели}
+\Crefname{table}{Табела}{Табели}
+\crefname{equation}{равенка}{равенки}
+\Crefname{equation}{Равенка}{Равенки}
+\crefname{chapter}{поглавје}{поглавја}
+\Crefname{chapter}{Поглавје}{Поглавја}
+\crefname{section}{оддел}{оддели}
+\Crefname{section}{Оддел}{Оддели}
+
+\lstdefinestyle{seminarcode}{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{codegray},
+  frame=single,
+  rulecolor=\color{academiclight},
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  aboveskip=0.8em,
+  belowskip=0.8em
+}
+\lstset{style=seminarcode}
+
+\newcolumntype{L}[1]{>{\RaggedRight\arraybackslash}p{#1}}
+\newcolumntype{Y}{>{\RaggedRight\arraybackslash}X}
+\newcommand{\breakableunderscore}{\leavevmode\hbox{\char`\_}\penalty0\hskip0pt\relax}
+\newcommand{\code}[1]{{\ttfamily\let\_=\breakableunderscore #1}}
+\newcommand{\status}[1]{\textbf{#1}}
+\newcommand{\evidence}[1]{\textit{#1}}
+\newcommand{\repo}[1]{\href{#1}{\nolinkurl{#1}}}
+\newcommand{\sourcepath}[1]{\texttt{\detokenize{#1}}}
+\tikzset{
+  box/.style={draw=academicblue,thick,rounded corners=2pt,fill=academiclight,align=center,minimum height=8mm,text width=30mm,font=\small},
+  process/.style={box,fill=white},
+  safety/.style={box,draw=safegreen,fill=safegreen!10},
+  physical/.style={box,draw=warnamber,fill=warnamber!10},
+  danger/.style={box,draw=faultred,fill=faultred!8},
+  flow/.style={-{Latex[length=2mm]},thick,draw=academicblue},
+  dashedflow/.style={flow,dashed}
+}
+
+\input{metadata}
+
+\begin{document}
+\pagenumbering{roman}
+\begin{titlepage}
+  \centering
+  {\large \UniversityName\par}
+  \vspace{0.5cm}
+  {\large \FacultyName\par}
+  {\StudyProgramme\par}
+  \vfill
+  {\Large\bfseries Семинарска работа\par}
+  \vspace{0.8cm}
+  {\LARGE\bfseries\color{academicblue}\SeminarTitle\par}
+  \vspace{0.35cm}
+  {\large\SeminarSubtitle\par}
+  \vspace{1cm}
+  {\large по предметот \CourseName\par}
+  \vfill
+  \begin{tabular}{@{}ll@{}}
+    Студент: & \StudentName \\
+    Број на индекс: & \StudentIndex \\
+    Професор: & \ProfessorName
+  \end{tabular}
+  \vfill
+  {\CityName, \AcademicYear\par}
+\end{titlepage}
+
+\input{chapters/00_predgovor_apstrakti}
+\tableofcontents
+\listoffigures
+\listoftables
+\clearpage
+
+\pagenumbering{arabic}
+\input{chapters/01_voved_teorija}
+\input{chapters/02_tehnologii_i_poceten_sistem}
+\input{chapters/03_arhitektura_i_razgovor}
+\input{chapters/04_simulaciski_profili_i_bezbednost}
+\input{chapters/05_fizicka_arhitektura_i_motion_sdk}
+\input{chapters/06_fizicki_emocii_i_tranzicii}
+\input{chapters/07_metodologija_i_rezultati}
+\input{chapters/08_neuspesi_etika_ogranicuvanja}
+\input{chapters/09_reproducibilnost_pridones_zaklucok}
+
+\appendix
+\input{appendices/A_ros_interfejsi}
+\input{appendices/B_status_i_dokazi}
+\input{appendices/C_komandi_i_rechnik}
+
+\end{document}

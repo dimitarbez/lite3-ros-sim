@@ -1,0 +1,96 @@
+\chapter*{Изјава за целта и опфатот}
+\addcontentsline{toc}{chapter}{Изјава за целта и опфатот}
+
+Во трудот е документиран развојот на разговорно управувано емоционално
+однесување кај четириножниот робот DEEP Robotics Lite3. Главниот методолошки
+принцип е \emph{simulation-first}: новите состојби, договори и движења најнапред
+се развиваат и проверуваат во ROS Noetic и Gazebo, а физичката интеграција е
+одделен, експлицитно ограничен пат со сопственик на MotionSDK, свежа телеметрија
+и fail-safe прекини. Трудот не ја претставува платформата како завршена
+производна целина. Напротив, за секое тврдење се наведува доказното ниво:
+имплементација, офлајн тест, Gazebo проверка, физичко извршување, операторска
+визуелна прифатеност или преостаната работа.
+
+Референтниот snapshot е јавната гранка
+\code{feature/emotion-robot-integration} на wrapper-репозиториумот, commit
+\code{c41f26ef4414e5c9a4748f3c88aee33820526c01}, со pinned EmotionBot commit
+\code{f267d28552bbf46f30a263bb291e71ab91a2b91b} и Lite3\_VMC commit
+\code{785a3846ec2c44a0380618490f837786b3250f76}. Доказите се состојба од
+20 септември 2026 година. Тие не се автоматска дозвола за нов физички тест и
+не треба да се генерализираат на друг robot model, firmware, checkout или
+безбедносна поставеност.
+
+\chapter*{Апстракт}
+\addcontentsline{toc}{chapter}{Апстракт}
+
+Во овој труд е развиена и анализирана архитектура за изразување емоционална
+состојба со движење на четириножниот робот DEEP Robotics Lite3. Разговорната
+порака се обработува со headless \textenglish{EmotionEngine}, кој произведува
+валентност, активација и една од девет дискретни категории. ROS-слојот ја
+пренесува состојбата преку верзионирани JSON договори, а во симулација
+\textenglish{expression mapper} и \textenglish{safety bridge} ја претвораат во
+ограничени \code{geometry\_msgs/Twist} намери и единствен
+\code{sensor\_msgs/Joy} влез за Lite3 контролерот. OpenAI Responses API е
+изолиран во Python 3.12 sidecar, додека ROS Noetic останува на Python 3.8 и
+има детерминистички offline fallback.
+
+Сите девет емоции се имплементирани и мерливо проверени во Gazebo. Нормалните
+профили не задаваат x, y или yaw; Joy и Surprise користат симулациски hop, а
+Anger симулациски stomp, без надворешни сили. Состојба со истечена свежина,
+disable, watchdog или shutdown завршува со нулта команда.
+
+Физичкиот пат е издвоен во split-host архитектура. Разговорното расудување
+останува на развојниот компјутер, а perception computer-от ја проверува
+телеметријата и го извршува единствениот континуиран MotionSDK runner. Neutral,
+Joy, Sadness, Fear и Anger имаат физички извршени и операторски прифатени
+реакции. Affection, Curiosity, Disgust и Surprise немаат прифатени физички
+профили и намерно се сведуваат на Neutral fallback. Стандардната allowlist е
+само \code{neutral}. Последните persistent-recovery корекции за Joy и Anger се
+поставени и офлајн тестирани, но немаат последователна физичка повторна
+валидација.
+
+Посебно се разгледани неуспешните high-level height обиди, ризикот од
+MotionSDK takeover, stale feedback, contact miss, attitude и battery interlock.
+Резултатот е репродуцибилен проектен прототип со јасно одделени
+симулациски и физички докази, а не тврдење за безусловно безбеден или целосно
+завршен роботски производ.
+
+\noindent\textbf{Клучни зборови:} DEEP Robotics Lite3, ROS Noetic, Gazebo,
+EmotionBot, EmotionEngine, афективна роботика, OpenAI Responses API, MotionSDK,
+разговорна интеракција, безбедносни ограничувања.
+
+\begin{english}
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+
+This seminar paper develops and analyzes an architecture for expressing an
+emotional state through the motion of a DEEP Robotics Lite3 quadruped. A chat
+message is appraised by the headless EmotionEngine, which produces valence,
+arousal, and one of nine discrete categories. In simulation, versioned JSON
+contracts, an expression mapper, and a safety bridge transform that state into
+bounded Twist intentions and the sole Joy input consumed by the Lite3 Gazebo
+controller. OpenAI Responses streaming is isolated in a Python 3.12 sidecar;
+ROS Noetic remains on Python 3.8 and retains a deterministic offline fallback.
+
+All nine categories are implemented and measurably exercised in Gazebo. The
+physical path is deliberately separate: conversational reasoning remains on the
+development computer, while telemetry validation, safety interlocks, and one
+continuous MotionSDK owner run on the robot perception computer. Neutral, Joy,
+Sadness, Fear, and Anger have physically executed and operator-accepted
+reactions. Affection, Curiosity, Disgust, and Surprise intentionally resolve to
+the accepted Neutral fallback. The checked-in default allowlist remains
+neutral-only. The latest persistent contact-miss recovery changes for Joy and
+Anger are deployed and offline-tested but still lack live physical
+revalidation.
+
+The work treats unsuccessful trials as results: a published ROS command or UDP
+packet is not considered proof of correct physical motion. Evidence is
+therefore separated into implementation, offline tests, Gazebo validation,
+physical execution, visual acceptance, deployed-but-unvalidated changes, and
+planned work. The outcome is a reproducible, safety-constrained project
+prototype rather than a claim of a complete production platform.
+
+\noindent\textbf{Keywords:} DEEP Robotics Lite3, ROS Noetic, Gazebo,
+EmotionBot, affective robotics, OpenAI Responses API, MotionSDK, conversational
+interaction, fail-safe control.
+\end{english}

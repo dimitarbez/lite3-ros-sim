@@ -1,0 +1,34 @@
+\begin{tikzpicture}[node distance=18mm and 25mm]
+  \node[process,text width=48mm] (dev) {
+    \textbf{Development computer}\\
+    chat + EmotionEngine\\
+    OpenAI или deterministic reply\\
+    hardware uplink};
+  \node[physical,right=of dev,text width=48mm] (perception) {
+    \textbf{Perception computer}\\
+    state validation + telemetry\\
+    contact/safety gates\\
+    sole MotionSDK runner};
+
+  \node[physical,below=of perception,text width=48mm] (motion) {
+    \textbf{Motion host}\\
+    vendor \code{jy\_exe}\\
+    state + joint feedback};
+  \node[physical,left=of motion,text width=48mm] (robot) {
+    \textbf{Physical Lite3}\\
+    12 joints + IMU\\
+    Retroid / STOP evidence};
+
+  \draw[flow] (dev) --
+    node[above,font=\scriptsize]{SSH loopback: NDJSON 1.0}
+    (perception);
+  \draw[flow,<->] (perception) --
+    node[right,font=\scriptsize,align=left]{MotionSDK UDP\\exclusive owner}
+    (motion);
+  \draw[flow,<->] (motion) --
+    node[below,font=\scriptsize]{vendor actuation / feedback path}
+    (robot);
+  \draw[dashedflow] (robot.north east) --
+    node[above,sloped,font=\scriptsize,fill=white,inner sep=1.5pt]{validated 0x0901 / 0x0906 telemetry}
+    (perception.south west);
+\end{tikzpicture}

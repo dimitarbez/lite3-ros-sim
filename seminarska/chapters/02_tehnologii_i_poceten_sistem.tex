@@ -1,0 +1,98 @@
+\chapter{Технологии, репозиториуми и почетен систем}
+\label{chap:technology}
+
+\section{Развојна средина}
+
+Развојниот host е WSL2 со Ubuntu 24.04. ROS Noetic, Gazebo Classic и catkin се
+извршуваат во Docker image базиран на Ubuntu 20.04. Ваквата комбинација го
+задржува поддржаниот Noetic userspace, а истовремено овозможува современ host и
+WSLg приказ. Главниот container го монтира Lite3 workspace-от read--write и
+EmotionBot read-only. Live OpenAI патот е посебен disposable Python 3.12
+container; offline режимот и сите редовни тестови не бараат API key, интернет,
+GUI, микрофон или физички робот.
+
+Во \cref{tab:technologies} се сумирани главните технологии. ROS Noetic и
+Gazebo се користат според нивните официјални интерфејси; MotionSDK ограничувањата и безбедносните
+предупредувања се преземени од официјалниот репозиториум и локалните manuals.
+
+\input{tables/technologies}
+
+\section{Git структура и референтен snapshot}
+
+Wrapper-репозиториумот pin-ира три submodules. Одржуваните изворни
+репозиториуми се EmotionBot и Lite3\_VMC fork-от; \code{lite3\_vmc\_upstream}
+е чиста споредбена копија и во неа не се развива. Структурата е прикажана на
+\cref{fig:repo-structure}. Јавните URL-адреси, гранките и SHA-вредностите биле
+проверени на 20 септември 2026 година.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{\input{figures/repository_structure}}
+\caption{Wrapper и pinned submodule структура на референтниот snapshot.}
+\label{fig:repo-structure}
+\end{figure}
+
+Wrapper-от е commit
+\code{c41f26ef4414e5c9a4748f3c88aee33820526c01}. Неговиот EmotionBot gitlink
+покажува кон \code{f267d28552bbf46f30a263bb291e71ab91a2b91b}, а активниот
+Lite3\_VMC fork кон \code{785a3846ec2c44a0380618490f837786b3250f76}. Upstream
+референцата е \code{724aa54dee0cc374bd5417c86d649fb08d4d309a}. Овие commit-и
+се важни затоа што датиран verification record не докажува дека произволен
+подоцнежен checkout има исти резултати.
+
+\section{Почетниот Lite3\_VMC систем}
+
+Оригиналниот DEEP Robotics Lite3\_VMC обезбедува Gazebo модел, joint
+controllers, model spawner, keyboard input и симулациски executable. Baseline
+проверката утврдила:
+
+\begin{itemize}
+  \item 13 активни контролери: 12 joint effort controllers и еден
+  joint-state controller;
+  \item 12 joints на \code{/lite3\_gazebo/joint\_states};
+  \item keyboard publisher на \code{sensor\_msgs/Joy} преку \code{/joy}; и
+  \item симулацискиот executable го инстанцира Joy receiver-от, но не го
+  инстанцира постојниот \code{/cmd\_vel} receiver и не го применува
+  \code{speed\_update\_mode}.
+\end{itemize}
+
+Последната точка е суштинска: присуството на source class не значи дека
+runtime path е имплементиран. Поради тоа новата интеграција го ремапира
+единствениот контролен влез на \code{/emotion\_bot/joy\_out}; во трудот не се
+тврди дека \code{/cmd\_vel} е работен симулациски пат.
+
+Upstream spawner-от е чувствителен на standard input: првиот Enter ги стартува
+контролерите, а вториот ги запира и го отстранува моделот. EOF може веднаш да
+предизвика cleanup. Интегрираниот launch затоа користи service-based controller
+loader и supervising runner, без да го менува upstream baseline workflow.
+
+\section{EmotionBot и лиценцна граница}
+
+EmotionBot е GPL-3.0 проект. Во интеграцијата не се копира неговиот emotional
+core, ниту интерактивниот \code{main.py} се автоматизира преку stdin. Наместо
+тоа, во EmotionBot е додаден повторно употреблив headless API
+\code{emotional\_core.engine.EmotionEngine}. Тој управува со appraisal,
+personality, memory, valence, arousal, categorical state и deterministic
+fallback. Import-от не бара plotting, микрофон, network, модел или API key.
+
+ROS contract-ите, conversation ordering, mapping и симулациска заштита се во
+новиот \code{emotion\_bot\_ros} package во Lite3\_VMC fork-от. Физичкиот
+hardware workspace, MotionSDK runner и ticket evidence се во wrapper-от. Со
+ова се избегнува погрешно припишување: upstream Lite3 controller и EmotionBot
+domain logic остануваат дела со сопствена историја и лиценца, додека
+интеграциските слоеви се проектни измени.
+
+\section{Барања и ограничувања}
+
+Главните функционални барања се девет категории, live и offline разговор,
+верзионирани состојби, визуелно различни Gazebo профили, exact-neutral
+транзиции и inspectable status. Нефункционалните барања се детерминизам на
+тестовите, bounded latency/size, no-secret handling, fail-safe zeroing,
+ексклузивна hardware ownership и репродуцибилен build.
+
+Ограничувањата се намерно строги. Normal chat не задава planar locomotion или
+yaw; Gazebo hop/stomp не се пренесуваат на hardware; physical airborne hop,
+torque strike и external wrench не се дозволени; vendor \code{lite\_cog},
+\code{qnx2ros} и \code{jy\_exe} не се менуваат. Физичката работа не е нормален
+дел од симулацискиот workflow и бара одделна авторизација, operator и fresh
+telemetry.

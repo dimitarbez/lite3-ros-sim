@@ -1,0 +1,26 @@
+\begin{tikzpicture}[node distance=7mm and 12mm]
+  \node[process,text width=31mm] (user) {Корисник\\\code{emotion\_chat.py}};
+  \node[process,below=of user,text width=31mm] (chat) {Chat adapter\\turn ordering};
+  \node[process,below=of chat,text width=31mm] (engine) {EmotionEngine\\$v$, $a$, category};
+  \node[box,below=of engine,text width=31mm] (state) {ROS state 1.1\\валидирана граница};
+
+  \node[process,right=of chat,text width=32mm] (sidecar) {OpenAI sidecar\\Python 3.12};
+  \draw[flow] (user) -- (chat);
+  \draw[flow] (chat) -- (engine);
+  \draw[flow] (engine) -- (state);
+  \draw[flow,<->] (chat) -- node[above,font=\scriptsize]{stream/fallback} (sidecar);
+
+  \node[safety,right=22mm of state,text width=32mm] (mapper) {Expression mapper\\bounded intention};
+  \node[safety,right=of mapper,text width=32mm] (bridge) {Safety bridge\\arbitration + gates};
+  \node[process,right=of bridge,text width=29mm] (gazebo) {Joy controller\\Gazebo Lite3};
+  \draw[flow] (state) -- node[above,font=\scriptsize]{simulation} (mapper);
+  \draw[flow] (mapper) -- (bridge);
+  \draw[flow] (bridge) -- node[above,font=\scriptsize]{Joy} (gazebo);
+
+  \node[physical,below=11mm of mapper,text width=32mm] (uplink) {Hardware uplink\\NDJSON 1.0};
+  \node[physical,right=of uplink,text width=32mm] (runner) {Sole MotionSDK owner\\gates + trajectories};
+  \node[physical,right=of runner,text width=29mm] (robot) {Physical Lite3\\12 joints};
+  \draw[flow] (state.south) |- node[pos=0.72,above,font=\scriptsize]{physical} (uplink.west);
+  \draw[flow] (uplink) -- (runner);
+  \draw[flow] (runner) -- (robot);
+\end{tikzpicture}

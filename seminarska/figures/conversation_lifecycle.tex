@@ -1,0 +1,22 @@
+\begin{tikzpicture}[node distance=9mm and 9mm]
+  \node[process,text width=20mm] (input) {input\\turn $n$};
+  \node[process,right=of input,text width=23mm] (accept) {accepted\\user appraisal};
+  \node[process,right=of accept,text width=22mm] (start) {started\\backend};
+  \node[process,right=of start,text width=22mm] (delta) {delta$^*$\\stream};
+  \node[process,right=of delta,text width=25mm] (terminal) {completed\\assistant appraisal};
+  \draw[flow] (input) -- (accept);
+  \draw[flow] (accept) -- (start);
+  \draw[flow] (start) -- (delta);
+  \draw[flow] (delta) -- (terminal);
+  \node[danger,below=of delta,text width=28mm] (failure) {retrying\\offline fallback};
+  \draw[dashedflow] (start.south) -- (failure.north west);
+  \draw[dashedflow] (failure.north east) -- (terminal.south west);
+
+  \node[danger,below=of accept,text width=25mm] (cancel) {cancelled\\superseded};
+  \draw[dashedflow] (input.south east) -- (cancel.north west);
+  \coordinate (rejectleft) at ($(cancel.south)+(0,-7mm)$);
+  \coordinate (rejectright) at (rejectleft -| terminal.south);
+  \draw[dashedflow] (cancel.south) -- (rejectleft) -- (rejectright) -- (terminal.south);
+  \node[below=1mm,font=\scriptsize,fill=white,inner sep=1.5pt]
+    at ($(rejectleft)!0.55!(rejectright)$) {доцната завршница се отфрла};
+\end{tikzpicture}

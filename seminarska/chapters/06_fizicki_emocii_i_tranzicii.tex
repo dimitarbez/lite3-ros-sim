@@ -1,0 +1,155 @@
+\chapter{Физички емоции и транзициски договор}
+\label{chap:physical-emotions}
+
+\section{Ownership state machine}
+
+Legacy hardware supervisor-от ги именува состојбите прикажани на
+\cref{fig:hardware-sm}. Официјалниот continuous runner го задржува истиот
+безбедносен принцип: се започнува fail-closed, acquisition се дозволува само
+од exact state 1 и по preflight, а fault/release не води кон автоматско
+повторно преземање. \code{/expression\_status} е read-only evidence и не
+авторизира движење.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{0.92\textwidth}{!}{\input{figures/hardware_state_machine}}
+\caption{Логички safety/ownership состојби на одделниот hardware path.}
+\label{fig:hardware-sm}
+\end{figure}
+
+Normal profile resolver-от е table-driven. Requested EmotionEngine category
+се чува непроменета; одделно се објавуваат resolved/active profile и
+fallback reason. Така \code{affection} останува видлива како барана емоција,
+додека роботот изведува \code{neutral\_animal\_breath}. Прифатена категорија
+што не е во runtime allowlist исто добива Neutral, со причина
+\code{not\_enabled\_in\_normal\_allowlist}.
+
+\section{Задолжителен exact-neutral transition}
+
+Секој category change го следи \cref{fig:canonical-transition}. Ако paw е
+кренат, мора да се спушти и да се потврдат landing и supports. Потоа стариот
+loop се запира, командата quintic се враќа во точната canonical stand за 1.5 s,
+се држи 0.35 s и се стартува само најновиот pending target. Rapid request го
+заменува pending target без да го рестартира return-от; same-category update
+може да влијае на следниот loop, но не го прекинува тековниот.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{\input{figures/canonical_transition}}
+\caption{Canonical-neutral транзиција и hard-fault bypass.}
+\label{fig:canonical-transition}
+\end{figure}
+
+STOP и hard faults не чекаат conversational timing. Тие веднаш го активираат
+валидираниот hold/release. Stale chat не е unsupported-category fallback: се
+извршува safe neutral reset и control се ослободува, наместо robot бесконечно
+да дише со застарена состојба.
+
+\section{Neutral}
+
+Neutral е 3.25-секунден three-segment quintic loop: 0.75 s до expanded
+endpoint, 1.25 s до compressed endpoint и 1.25 s назад до exact neutral.
+HipX и yaw се нула. Base HipY се движи од $-0.008$ rad extension до $+0.020$
+rad compression, knee е двојно, roll bias е $\pm0.004$ rad, pitch bias
+$\pm0.003$ rad, а combined scalar е $-0.015..+0.027$ rad. Сите четири стапала
+остануваат planted.
+
+Физичкиот тест започнал од state 1, battery 37\% и errors 0. По stand и stable
+hold биле завршени 27 cycles (87.75 s) до operator handoff, без tracking или
+state fault. Максималните spans биле 0.0019074/0.0481415/0.0708771 rad за
+HipX/HipY/knee. Четири feedback pauses се опоравиле по 20 frames. Операторот го
+прифатил движењето како animal-like breathing.
+
+\section{Joy}
+
+Прифатениот Joy е 5-секунден alternating front-paw gesture: за секое стапало
+0.50 s transfer, 0.60 s rise, 0.30 s hold, 0.60 s lower и 0.50 s settle.
+Lift target е 50 mm; lateral transfer е 20 mm, а rearward transfer 30 mm лево
+и 35 mm десно. Асиметријата е изведена од физички load evidence, не од
+естетска претпоставка.
+
+Acceptance suite имал baseline 120.632 N. Front-left unload/landing бил
+0.975/36.139 N, а front-right 6.504/30.089 N, со четири supports на двете
+landing фази, без safety fault и со clean release. Операторот ја прифатил
+анимацијата. Подоцна два normal chat loops и mid-paw retargets поминале.
+
+Природнојазичен Joy turn потоа изложил policy defect. Првиот циклус поминал,
+но вториот left unload останал 12.522 N. Paw бил безбедно спуштен на 36.179 N
+со четири supports, но runner-от го третирал recoverable miss како terminal и
+по release роботот легнал. Корекцијата сега прави 1.5+0.35 s canonical Neutral
+и го продолжува Joy под истиот owner само ако landing и четири supports се
+потврдени. Сите девет native suites, 29 Python tests, clean build и aarch64
+deployment поминале; installed SHA-256 има префикс \code{aa449b}. Не била
+испратена motion команда по deployment, па оваа последна корекција е
+\status{deployed/offline-tested, live-unvalidated}.
+
+\section{Sadness}
+
+Paw-hover кандидатот не го потврдил unload-от (8.875 N) и бил визуелно
+отфрлен. Неколку planted варијанти биле премногу суптилни. Differential bows
+од 70 mm и 56 mm стигнале до 10.006 и 10.005 степени pitch и правилно го
+активирале hard attitude gate пред heave фазата.
+
+Прифатената варијанта ги спушта само предните corners за 48 mm за 1.50 s,
+се стабилизира 0.50 s, изведува три 14 mm heaves со 4 mm alternating side tilt,
+држи 1.00 s и се враќа 1.50 s; loop-от е 7.80 s. Единечниот тест и два cycles
+за 15.6 s ги задржале четирите supports, немале safety fault и добиле позитивна
+операторска оценка. Normal Sadness selection, Sadness$\rightarrow$Neutral и
+Sadness$\rightarrow$Fear exact-neutral retarget исто се физички потврдени.
+
+\section{Fear}
+
+Paw-hover Fear candidates не биле прифатени: дел од нив не го минале unload
+gate, а операторот оценил дека визуелно не изгледаат како страв. Наместо
+bypass, направен е all-feet-planted loop од flinch, rearward recoil, пет
+латерални cower transitions, freeze и exact recovery. Три 5-секундни cycles
+завршиле за 15 s. Еден stale-feedback pause во stand hold бил задржан и
+опоравен; немало safety fault. Финално имало четири supports, state 1/0/0,
+battery 60\%, errors 0 и clean release. Операторот потврдил дека Fear работи
+правилно. Normal selection, repeat, Fear$\rightarrow$Neutral и
+Fear$\rightarrow$Anger retarget се потврдени.
+
+\section{Anger}
+
+Anger не е удар. Тој користи 8 mm brace, 6 mm stance widening, 35 mm paw target,
+0.35 s quintic lower, 0.25 s stationary landing dwell и canonical support reset
+меѓу paws. Се бара unload, две strong supports, 70 N aggregate load, landing и
+четири supports пред следното стапало.
+
+Првиот 15-секунден repeat минал два cycles, но третиот final-right landing
+повторно потврдил само три supports. X/Y recenter revision исто не била
+доволна. Canonical-reset revision враќа body shift, brace и stance width за 1.0
+s, држи 0.35 s, па го проверува истиот gate. Во authorized three-cycle test
+сите шест placements поминале; baseline бил 121.912 N, немало safety fault или
+feedback pause и release бил чист. Операторот ја прифатил кореографијата.
+Normal Anger loops и Anger$\rightarrow$Disgust fallback retarget под еден owner
+подоцна поминале.
+
+Како кај Joy, подоцнежен unload miss (6.247 N) бил безбедно спуштен и landed на
+28.424 N со четири supports, но старата policy сепак release-ирала. Новата
+корекција логира \code{ANGER\_CONTACT\_MISS\_RECOVERED}, прави canonical
+Neutral и продолжува Anger само по целосна contact recovery. Девет native
+suites, 29 Python tests, clean build и aarch64 deployment поминале; installed
+SHA-256 има префикс \code{e72a2d}. Бидејќи немало нов motion test,
+корекцијата е \status{deployed/offline-tested, live-unvalidated}.
+
+\section{Неприфатени четири категории}
+
+Affection, Curiosity, Disgust и Surprise имаат специфицирани замисли, но немаат
+финални MotionSDK profiles, bounded physical acceptance и операторска оценка.
+Нивните нормални барања се зачувуваат како truthful requested emotion, а
+resolver-от активира Neutral со
+\code{physical\_reaction\_not\_accepted}. Претходни planted prototypes не се
+сметаат за прифатени профили. Physical airborne hop, yaw, locomotion и torque
+strike остануваат забранети.
+
+Сумарната споредба на деветте категории е дадена во
+\cref{tab:physical-emotions}; таа намерно ги одделува прифатените реакции од
+планираните профили и од тековниот normal allowlist.
+
+\input{tables/physical_emotions}
+
+И покрај физички прифатените пет реакции, checked-in normal allowlist останува
+само \code{neutral}. Причините се pending consolidated operator verdict за
+целосниот sweep и live revalidation на последните Joy/Anger persistent-recovery
+корекции. Додавање environment value не е доказ за commissioning.

@@ -1,0 +1,21 @@
+\begin{tikzpicture}[node distance=17mm and 22mm]
+  \node[box,text width=27mm] (zero) {\textbf{ZERO}\\exact zero};
+  \node[process,right=of zero,text width=27mm] (ready) {\textbf{READY}\\stance prepared};
+  \node[safety,right=of ready,text width=27mm] (enabled) {\textbf{ENABLED}\\bounded output};
+  \node[danger,below=of ready,text width=27mm] (fault) {\textbf{FAULT}\\permission revoked};
+  \node[physical,below=of enabled,text width=27mm] (recover) {\textbf{RECOVERY}\\recentering};
+
+  \draw[flow] (zero) -- node[above,font=\scriptsize]{controllers + stance} (ready);
+  \draw[flow] (ready) -- node[above,font=\scriptsize]{enable} (enabled);
+  \draw[flow] (enabled) -- node[right,font=\scriptsize]{soft drift} (recover);
+  \draw[flow] (recover.west) to[bend left=22]
+    node[below,font=\scriptsize,fill=white,inner sep=1pt]{inside radius} (enabled.south west);
+  \coordinate (stalelevel) at ($(ready.north)+(0,8mm)$);
+  \draw[dashedflow] (enabled.north) |- (stalelevel) -| (zero.north);
+  \node[above=0.5mm,font=\scriptsize,fill=white,inner sep=1pt]
+    at (stalelevel) {stale / disable};
+  \draw[flow] (enabled.south west) --
+    node[above,sloped,font=\scriptsize,fill=white,inner sep=1pt]{health / bound fault}
+    (fault.north east);
+  \draw[flow] (fault.west) -| node[pos=0.25,below,font=\scriptsize]{explicit reset} (zero.south);
+\end{tikzpicture}

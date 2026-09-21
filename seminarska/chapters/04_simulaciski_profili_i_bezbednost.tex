@@ -1,0 +1,124 @@
+\chapter{Симулациски профили, mapper и безбедносен мост}
+\label{chap:simulation}
+
+\section{Интегрираниот ROS тек}
+
+Симулацискиот пат е прикажан на \cref{fig:simulation-flow}. Mapper-от работи на
+20 Hz, применува low-pass филтри за valence и arousal, quintic interpolation и
+slew limits. Потоа safety bridge-от повторно ги ограничува командите,
+арбитрира со manual input, проверува readiness/health и го објавува
+единствениот \code{sensor\_msgs/Joy} transport на
+\code{/emotion\_bot/joy\_out}. \code{/emotion\_bot/safe\_cmd} е inspectable
+\code{Twist}, а не директен actuator transport.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{\input{figures/simulation_flow}}
+\caption{Симулациски ROS тек од emotion-state до Lite3 controller.}
+\label{fig:simulation-flow}
+\end{figure}
+
+Integrated launch-от стартува Gazebo, модел, 13 controllers, controller loader,
+Lite3 runner, chat/emotion adapters, mapper и safety bridge. Controller
+readiness се објавува на \code{/emotion\_bot/sim\_controller\_ready}. За
+interactive handoff, status мора да покаже
+\code{sim\_ready=true}, \code{health\_ok=true},
+\code{stance\_prepared=true} и \code{motion\_enabled=true}.
+
+\section{Fluid mapper}
+
+Секој профил во \code{config/default.yaml} има entrance \code{segments} и
+повторливи \code{idle\_segments}. Keyframe endpoints се поврзуваат со quintic
+smootherstep
+
+\begin{equation}
+  s(u)=6u^5-15u^4+10u^3, \qquad u\in[0,1],
+  \label{eq:smootherstep}
+\end{equation}
+
+за кој $s'(0)=s'(1)=s''(0)=s''(1)=0$. Така position, velocity и acceleration
+немаат дисконтинуитет на seam. Mapper-от дополнително користи valence/arousal
+time constants од 0.45/0.35 s, 1.25 entrance gain, 65\% idle amplitude и 1.25
+idle duration factor.
+
+Секоја non-neutral промена прво го откажува старото action generation, се
+враќа на точна нула за 0.25 s и ја задржува canonical stance 0.35 s. Ова е
+симулациски timing; физичкиот exact-neutral return е подолг, 1.5 s. Same-category
+appraisal ја ажурира интензивноста без да го рестартира loop-от.
+
+Normal profiles имаат
+
+\begin{equation}
+  v_x=v_y=\omega_z=0,
+  \label{eq:centered}
+\end{equation}
+
+а ги користат body height, roll и pitch. Envelope-от е $\pm0.100$ m за height
+и $\pm0.625$ rad за roll/pitch, со 0.18 m/s height slew и 1.00 rad/s mapper
+attitude slew. Овие се симулациски граници и не се MotionSDK joint offsets.
+
+\section{Девет профили}
+
+Во \cref{tab:sim-emotions} се прикажани сите категории. Последните joint
+excursions се од two-idle-cycle headless sweep на референтниот snapshot. Тие се
+мерења на симулациски joints, а не препорачани hardware амплитуди.
+
+\input{tables/simulation_emotions}
+
+Joy и Surprise користат controller-side hop од 0.55 s со вертикални offsets
+\begin{equation*}
+(-0.069,\ +0.100,\ -0.050,\ 0.0)\ \mathrm{m}.
+\end{equation*}
+Anger користи 0.75 s stomp со седум offsets и
+smooth recovery. Двете actions се bounded, cancellation-aware и generation
+ordered. Максималната вертикална брзина е 1.125 m/s. Не се применува Gazebo
+external wrench. Поради тоа „hop“ и „stomp“ во ова поглавје значат исклучиво
+симулациски controller actions; тие не се физички airborne jump или torque
+strike.
+
+\section{Safety bridge, arbitration и watchdog}
+
+Состојбите од \cref{fig:simulation-safety} ја илустрираат operational logic.
+Системот започнува со нулта команда. По controller readiness се подготвува
+\code{JOY\_STAND} и се чека четири секунди simulated time за settling. Manual
+activity има приоритет 0.75 s, но ги дели истите clamps. Emotion и manual
+командите истекуваат по 0.5 s; emotion state по 1.0 s.
+
+\begin{figure}[htbp]
+\centering
+\input{figures/safety_state_machine}
+\caption{Поедноставена состојбена машина на симулацискиот safety bridge.}
+\label{fig:simulation-safety}
+\end{figure}
+
+Заштитата следи finite model pose, torso height, tilt и 12 joints. Invalid data,
+health gap, disable, stale source или node loss водат кон exact zero и revoked
+permission. Симулаторот останува dynamic, но има simulation-only recenter:
+на 0.09 m од enable-time центарот започнува recovery со најмногу 0.012 m
+increment, сè додека роботот не влезе под 0.035 m; 0.20 m е hard stop. HipX
+anti-splay term од 40 Nm/rad ги центрира четирите abduction joints. Ниту еден
+од овие Gazebo механизми не е физички controller claim.
+
+\section{Симулациски verification резултати}
+
+На референтниот snapshot, \code{make -C lite3-noetic verify-emotion} е
+repeatable offline authority. Датираниот record наведува:
+
+\begin{itemize}
+  \item clean Release \code{catkin\_make} со само постојни upstream warnings;
+  \item 58 Python tests и 5 controller-side C++ trajectory tests;
+  \item еден offline OpenAI process-boundary streaming test;
+  \item еден ROS integration test со 0 failures/errors;
+  \item два isolated headless Gazebo sweeps со 13 controllers и 12 joints;
+  \item сите девет entrance/idle profiles, rapid Joy$\rightarrow$Anger$\rightarrow$Fear,
+  manual priority, watchdog zeroing и no-hardware boundary; и
+  \item per-profile contact-model drift под 0.025 m во најновиот two-loop sweep,
+  при guard од 0.10 m.
+\end{itemize}
+
+Anger произвел три целосни stomp occurrences и recoveries; Joy и Surprise ги
+извршиле hop actions. Секоја директна non-neutral промена имала најмалку пет
+последователни exact-zero mapper samples пред нов entrance. WSLg GUI бил
+прегледан со блиска камера, при што повеќе chat-driven transitions останале
+исправени и со разделени стапала. Овие резултати се силен симулациски доказ,
+но не докажуваат физичко однесување.

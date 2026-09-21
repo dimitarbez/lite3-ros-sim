@@ -1,0 +1,122 @@
+\chapter{Неуспешни експерименти, безбедност и ограничувања}
+\label{chap:failures}
+
+\section{Неуспехот како резултат}
+
+Во роботика е лесно да се прикаже успешниот command path и да се изостави
+отсуството на ефект. Во овој проект неуспехот е evidence ако е датиран,
+ограничен и корелиран. \Cref{tab:failures} ги сумира клучните случаи; подолу
+се анализираат причините и преостанатата неизвесност.
+
+\input{tables/failed_experiments}
+
+\section{ROS команда без физичко движење}
+
+Очекувањето било height-only Joy или Neutral waveform да го помести трупот.
+Забележани биле emotion state, mapper output и \code{/simple\_cmd}; по bridge
+serialization fix се виделе 39 height datagrams, 10 heartbeats и final exact
+zero на wire. Сепак joint span бил околу 0.00099 rad и немало визуелно
+движење. Потврдена причина за дел од packet loss била queue depth 1 и
+back-to-back uncommissioned axes, но \code{jy\_exe} acceptance на nonzero
+height останал нерешен. Fail-safe исходот бил exact zero, DISARMED, restored
+transmit flags false и без повторно зголемување на амплитуда.
+
+Direct Retroid-compatible test подоцна докажал дека exact mode ordering,
+cadence и companion value се важни. Но дури и таму првиот whole-run joint span
+бил погрешно толкуван додека не се одделил Move-to-Pose transition. Ова ја
+нагласува потребата baseline/window да се дефинира пред активната команда.
+
+\section{Небезбеден takeover}
+
+Очекувањето било MotionSDK да ја преземе моменталната стоечка поза и да додаде
+мал offset. Набљудувани биле backward stepping и големи joint excursions.
+Source/manual review потврдил дека \code{RobotStateInit} reset-ира кон zero;
+„current-pose acquisition“ била погрешна хипотеза. Test е запрен пред breathing,
+takeover hard gate не е bypass-иран, а официјалниот пат е пренасочен кон
+state-1 zero-to-stand sequence под соодветна restraint. Овој негативен
+резултат е една од најважните безбедносни лекции во проектот.
+
+\section{Stale feedback и watchdog recovery}
+
+Еден early official-breathing обид завршил со
+\code{ABORT stale 0x0906 feedback}. Причината не била robot-state fault, туку
+пасивни scheduling gaps околу 100--166 ms. Наместо watchdog да се исклучи,
+воведено е двостепено однесување: trajectory-time freeze над 100 ms, hold на
+последна валидна поза и resume по 20 fresh frames; на 250 ms се release-ира.
+Во подоцнежните тестови pauses се забележани и опоравени, додека state 8
+сепак веднаш активирал release. Значи толеранцијата кон bounded jitter не ја
+претвора мртвата телеметрија во дозвола за blind control.
+
+\section{Contact unload, landing и support miss}
+
+Joy, Sadness, Fear и Anger прототипите покажале дека joint trajectory не е
+доказ дека стапалото е unload-ирано. Примери се 8.875 N Sadness, 7.264 N Fear и
+12.522 N повторен Joy left paw. Во секој случај paw бил спуштен и support бил
+повторно оценет. Threshold не бил намалуван за да се добие pass.
+
+Кај Anger, final right landing од третиот repeat имал target load 13.133 N,
+но само три support latches. Motion визуелно изгледал добро, сепак endurance
+резултатот останал failure. X/Y recenter не помогнал; дури exact canonical
+support reset меѓу paws поминал шест placements. Ова покажува дека force value
+на target leg и целокупната support topology мора да се разгледуваат заедно.
+
+\section{Battery и attitude interlocks}
+
+Sadness кандидати од 70 mm и 56 mm стигнале малку над $10^{\circ}$ pitch и
+биле прекинати пред анимираната фаза. Вредностите 10.006 и 10.005 степени не се
+„заокружуваат“ во pass: hard bound е бинарен. Final 48 mm front-only design го
+вратил margin-от без да се менува gate.
+
+Во Anger-to-Disgust сесија explicit 75\% floor видел 74\% и веднаш release-ирал.
+Retarget не бил броен како pass. Подоцнежна independent сесија користела веќе
+конфигуриран 25\% project floor само по експлицитна operator одлука; другите
+gates не биле ослабени. Овој пример покажува дека резултатот мора да го наведе
+точниот floor, а не само „battery was healthy“.
+
+\section{Network, chat и simulator failures}
+
+Live OpenAI physical attempt не бил pass кога user appraisal стигнал како Joy,
+но client timeout-ирал пред assistant response. Изолираната причина била
+intermittent DNS resolution failure. Поправката и два live smoke tests се
+извршени пред повторна физичка сесија. Во Gazebo, две longer animation sweep
+извршувања запреле поради stalled simulated clock. Пократкиот all-category
+sweep поминал, но тоа не го претвора stalled run во успех.
+
+\section{Безбедносни и етички аспекти}
+
+Безбедноста е системско својство, не придавка. Во овој проект се применуваат:
+
+\begin{itemize}
+  \item explicit current-task authorization, fresh telemetry и human operator;
+  \item clear area, manufacturer restraint/hoist каде што е барано, независен
+  STOP и без луѓе во опасната зона;
+  \item еден exclusive sender и забрана за concurrent Retroid/SDK paths;
+  \item state, error, battery, attitude, tracking, feedback и contact gates;
+  \item deadline-bounded quintic trajectories, zero torque feed-forward и
+  deterministic release;
+  \item no-secret practice за API key, SSH и packet captures; и
+  \item искрено известување за negative и unvalidated results.
+\end{itemize}
+
+Емоционалното движење може да го засили anthropomorphism. Затоа трудот не
+тврди дека роботот „чувствува“ емоции; системот пресметува и изразува
+категоризирана affective state. Корисникот треба да може да разликува engine
+state, physical fallback и safety override. Status contract-от токму затоа не
+ја преименува unsupported emotion во Neutral.
+
+\section{Ограничувања}
+
+Проектот е prototype на еден Lite3 и едно проверено software/network
+опкружување. Нема формална human-subject study за препознатливоста; operator
+acceptance е инженерски acceptance criterion, не популациски резултат. Contact
+estimator-от е изведен од torque и model Jacobian, а не од независни force
+sensors. Battery floors се разликувале по authorized session. MotionSDK
+takeover и release може да завршат со vendor sit/lie behavior; не е seamless
+handoff.
+
+Физичката allowlist е Neutral-only. Четири профили се планирани, а persistent
+Joy/Anger contact-miss recovery сè уште нема live revalidation. Нема airborne
+hop, locomotion, yaw, forceful stomp или general obstacle-aware behavior.
+Gazebo Classic има завршен upstream life cycle, што е дополнителна долгорочна
+техничка обврска. Овие ограничувања го спречуваат
+проектот да се нарече завршена production platform.

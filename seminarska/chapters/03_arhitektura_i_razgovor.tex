@@ -1,0 +1,121 @@
+\chapter{Архитектура, EmotionEngine и разговорен систем}
+\label{chap:architecture}
+
+\section{Слоевита архитектура}
+
+Целокупниот систем е прикажан на \cref{fig:system-architecture}. Заедничката
+граница меѓу симулацијата и hardware не е actuator command, туку валидирана
+емоционална состојба. Ова овозможува истиот разговор и EmotionEngine да се
+користат во двата режима, без симулациски \code{Twist}, \code{Joy}, hop или
+stomp да стигнат до физичкиот робот.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{\input{figures/system_architecture}}
+\caption{Целокупна архитектура и раздвојување на симулацискиот и физичкиот пат.}
+\label{fig:system-architecture}
+\end{figure}
+
+Архитектурата има пет логички слоеви:
+
+\begin{enumerate}
+  \item \textbf{разговорен слој} --- прифаќа input, управува со turn lifecycle,
+  streaming, retry, cancellation и fallback;
+  \item \textbf{афективен слој} --- EmotionEngine го ажурира $v$, $a$ и $e$;
+  \item \textbf{contract слој} --- проверува schema, sequence, turn correlation
+  и bounds;
+  \item \textbf{expression/safety слој} --- декларативната емоција ја претвора
+  во ограничена симулациска или физичка кореографија; и
+  \item \textbf{controller слој} --- Lite3 simulator controller или единствениот
+  MotionSDK owner ја извршува веќе одобрената намера.
+\end{enumerate}
+
+Ниту chat adapter-от ниту EmotionEngine објавуваат joint effort, motor data,
+UDP или Joy. Со тоа природнојазичниот дел не е дел од hard real-time
+безбедносниот loop.
+
+\section{Headless EmotionEngine}
+
+\code{EmotionEngine} е поддржаниот интеграциски API во EmotionBot. Една
+инстанца претставува разговорна сесија и управува со appraisal, state,
+personality, memory, local response shaping и опционална seeded randomness.
+Default конфигурацијата е deterministic со seed 7 и исклучена randomness.
+За тестирање постои експлицитниот облик \code{event:<emotion>}, со кој без
+нејасност се активира секоја од деветте категории.
+
+Состојбата е ограничена според \cref{eq:va-bounds} и \cref{eq:emotion-set}.
+Malformed input или непозната категорија не создава actuator command. Domain
+logic останува во EmotionBot; ROS time, topics, turn IDs и robot behavior
+остануваат во \code{emotion\_bot\_ros} и hardware workspace-от.
+
+\section{Разговорен lifecycle и ordering}
+
+Conversation contract 1.0 бара \code{schema\_version}, timestamp, непразен
+\code{turn\_id}, позитивен \code{turn\_index} и еден lifecycle event. Текот е
+прикажан на \cref{fig:conversation-lifecycle}. User message се appraisal-ира
+веднаш по \code{accepted}; assistant message се appraisal-ира само по
+\code{completed}. Така partial delta не ја менува емоцијата.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{\input{figures/conversation_lifecycle}}
+\caption{Lifecycle на разговорен turn со retry, fallback и superseding cancellation.}
+\label{fig:conversation-lifecycle}
+\end{figure}
+
+Coordinator-от чува најмногу шест turns и 6000 characters context, input до
+2000 characters, response до 6000 characters и 300 model output tokens. Нов
+input прво го означува стариот turn како cancelled. \code{TurnGate} отфрла
+late, duplicate и out-of-order completion. Последниот прифатен turn index се
+чува на ROS parameter server, па рестартиран chat node продолжува монотоно во
+истиот graph.
+
+Овој механизам решава конкретен забележан race: heartbeat на 2 Hz можел да ја
+препокрие one-shot assistant appraisal додека interactive client чекал
+корелирана состојба. Корекцијата ја задржува matching assistant state за
+активниот turn и е покриена со unit и ROS integration test. Ова е пример каде
+sequence/turn semantics се подеднакво важни како самата emotion classifier
+логика.
+
+\section{Emotion-state contract 1.1}
+
+Состојбата се објавува како compact JSON на \code{/emotion\_bot/state}. Таа
+содржи: \code{schema\_version=1.1}, ROS timestamp, nonnegative sequence,
+\code{turn\_id}, source, backend, valence, arousal и emotion. Heartbeat ја
+задржува истата semantic sequence и turn ID; не се третира како нова емоција.
+
+Пример:
+
+\begin{lstlisting}[language={},caption={Скратен пример на emotion-state 1.1},label={lst:state-contract}]
+{"arousal":0.6,"backend":"deterministic","emotion":"joy",
+ "schema_version":"1.1","sequence":1,"source":"user",
+ "stamp":{"secs":1,"nsecs":938900000},
+ "turn_id":"turn-000001","valence":0.7}
+\end{lstlisting}
+
+Валидацијата бара валидни bounds и точно една од деветте категории. Малформирана
+состојба во симулација дава neutral mapper output; на физичкиот пат invalid или
+replayed transport frame не се прифаќа.
+
+\section{OpenAI sidecar и offline fallback}
+
+Live assistant response се генерира преку официјалниот OpenAI SDK и Responses
+streaming API. Sidecar-от работи на Python 3.12,
+се врзува само на \code{127.0.0.1:8765} и прима bounded JSON на
+\code{/v1/stream}. Проектната конфигурација користи \code{gpt-5-mini},
+\code{stream=true}, \code{store=false}, minimal reasoning, low verbosity и
+20-секунден timeout. SDK retries се исклучени; coordinator-от прави најмногу
+еден retry и потоа преминува на deterministic fallback.
+
+API key се пренесува само преку environment variable во disposable container.
+Не се запишува во ROS parameter, source, command argument, image или log.
+Health endpoint-от објавува само дали key е присутен и дали bridge е во test
+mode. Обичните verification targets користат process-boundary test mode и не
+прават платен network request.
+
+Физичкиот OpenAI test открил intermittent DNS failure и недоволно долг client
+wait window. Потоа sidecar launch-от добил експлицитни resolvers, а client
+deadline е изведен од целосниот provider retry window плус fallback margin.
+Две live smoke проверки поминале за 8.239 s и 12.015 s пред повторниот физички
+разговорен тест. Овој резултат е network/ordering доказ; сам по себе не е доказ
+за роботско движење.

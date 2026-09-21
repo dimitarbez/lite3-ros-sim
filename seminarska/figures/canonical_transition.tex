@@ -1,0 +1,16 @@
+\begin{tikzpicture}[node distance=10mm and 9mm]
+  \node[physical,text width=27mm] (old) {category change\\активна фаза};
+  \node[safety,right=of old,text width=29mm] (lower) {спушти paw\\потврди landing};
+  \node[process,right=of lower,text width=27mm] (cancel) {прекини го\\стариот loop};
+  \node[process,right=of cancel,text width=31mm] (return) {quintic return 1.5 s\\exact hold 0.35 s};
+  \node[physical,right=of return,text width=28mm] (new) {најнов target\\нова емоција};
+  \draw[flow] (old) -- (lower);
+  \draw[flow] (lower) -- (cancel);
+  \draw[flow] (cancel) -- (return);
+  \draw[flow] (return) -- (new);
+
+  \node[danger,below=12mm of cancel,text width=42mm] (hard) {STOP / hard fault\\immediate hold + release};
+  \draw[dashedflow] (old.south) |- (hard.west);
+  \draw[dashedflow] (lower.south) -- (hard.north west);
+  \draw[dashedflow] (new.south) |- (hard.east);
+\end{tikzpicture}
