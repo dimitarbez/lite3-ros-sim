@@ -9,6 +9,9 @@
 // deliberately keep the first commissioning target below the already accepted
 // 50 mm joy lift while making the lowering cadence measurably more deliberate.
 constexpr double kAngerBraceSeconds = 0.55;
+constexpr double kAngerDisplaySinkSeconds = 1.10;
+constexpr double kAngerDisplayHoldSeconds = 0.35;
+constexpr double kAngerDisplayResetSeconds = 1.10;
 constexpr double kAngerLiftSeconds = 0.65;
 constexpr double kAngerPlaceSeconds = 0.60;
 constexpr double kAngerLowerSeconds = 0.35;
@@ -17,7 +20,7 @@ constexpr double kAngerRelatchSeconds = 1.00;
 constexpr double kAngerRelatchHoldSeconds = 0.35;
 constexpr double kAngerHoldSeconds = 0.65;
 constexpr double kAngerRecoverSeconds = 1.30;
-constexpr double kAngerLoopSeconds = 7.70;
+constexpr double kAngerLoopSeconds = 10.25;
 
 constexpr double kAngerLiftMeters = 0.035;
 constexpr double kAngerMaximumLiftMeters = 0.035;
@@ -26,6 +29,14 @@ constexpr double kAngerRightSupportShiftXMeters = 0.035;
 constexpr double kAngerSupportShiftYMeters = 0.020;
 constexpr double kAngerBraceMeters = 0.008;
 constexpr double kAngerStanceMeters = 0.006;
+// Negative Cartesian X biases the planted torso forward; positive X is the
+// separately calibrated rearward transfer needed while a front paw unloads.
+// This display returns to exact stand before either support transfer.
+constexpr double kAngerDisplayForwardXMeters = -0.020;
+constexpr double kAngerDisplayFrontDropMeters = 0.040;
+constexpr double kAngerDisplayStanceMeters = 0.010;
+constexpr double kAngerDisplayMaximumSpeedMps = 0.070;
+constexpr double kAngerDisplayMaximumAccelerationMps2 = 0.200;
 constexpr double kAngerMaximumDownwardVelocityMps = 0.190;
 constexpr double kAngerMaximumDownwardAccelerationMps2 = 1.70;
 
@@ -40,7 +51,9 @@ inline double QuinticMaximumAcceleration(double distance, double duration) {
 }
 
 inline bool AngerStompLimitsValid(double lift_meters) {
-  const double duration_sum = kAngerBraceSeconds + 2.0 * kAngerLiftSeconds +
+  const double duration_sum = kAngerDisplaySinkSeconds +
+      kAngerDisplayHoldSeconds + kAngerDisplayResetSeconds +
+      kAngerBraceSeconds + 2.0 * kAngerLiftSeconds +
       2.0 * (kAngerPlaceSeconds + kAngerRelatchSeconds +
              kAngerRelatchHoldSeconds) +
       kAngerHoldSeconds + kAngerRecoverSeconds;
@@ -49,6 +62,35 @@ inline bool AngerStompLimitsValid(double lift_meters) {
       std::abs((kAngerLowerSeconds + kAngerLandingDwellSeconds) -
                kAngerPlaceSeconds) < 1e-12 &&
       std::abs(duration_sum - kAngerLoopSeconds) < 1e-12 &&
+      kAngerDisplayForwardXMeters < 0.0 &&
+      kAngerDisplayForwardXMeters >= -0.020 &&
+      kAngerDisplayFrontDropMeters > kAngerBraceMeters &&
+      kAngerDisplayFrontDropMeters <= 0.040 &&
+      kAngerDisplayStanceMeters <= 0.010 &&
+      QuinticMaximumSpeed(kAngerDisplayForwardXMeters,
+                          kAngerDisplaySinkSeconds) <=
+          kAngerDisplayMaximumSpeedMps &&
+      QuinticMaximumSpeed(kAngerDisplayForwardXMeters,
+                          kAngerDisplayResetSeconds) <=
+          kAngerDisplayMaximumSpeedMps &&
+      QuinticMaximumAcceleration(kAngerDisplayForwardXMeters,
+                                  kAngerDisplaySinkSeconds) <=
+          kAngerDisplayMaximumAccelerationMps2 &&
+      QuinticMaximumAcceleration(kAngerDisplayForwardXMeters,
+                                  kAngerDisplayResetSeconds) <=
+          kAngerDisplayMaximumAccelerationMps2 &&
+      QuinticMaximumSpeed(kAngerDisplayFrontDropMeters,
+                          kAngerDisplaySinkSeconds) <=
+          kAngerDisplayMaximumSpeedMps &&
+      QuinticMaximumSpeed(kAngerDisplayFrontDropMeters,
+                          kAngerDisplayResetSeconds) <=
+          kAngerDisplayMaximumSpeedMps &&
+      QuinticMaximumAcceleration(kAngerDisplayFrontDropMeters,
+                                  kAngerDisplaySinkSeconds) <=
+          kAngerDisplayMaximumAccelerationMps2 &&
+      QuinticMaximumAcceleration(kAngerDisplayFrontDropMeters,
+                                  kAngerDisplayResetSeconds) <=
+          kAngerDisplayMaximumAccelerationMps2 &&
       QuinticMaximumSpeed(lift_meters, kAngerLowerSeconds) <=
           kAngerMaximumDownwardVelocityMps &&
       QuinticMaximumAcceleration(lift_meters, kAngerLowerSeconds) <=

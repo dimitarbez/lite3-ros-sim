@@ -42,7 +42,7 @@ but is not physically revalidated.
 | Disgust | [Disgust recoil](TICKET_DISGUST.md) | Planned |
 | Fear | [Fear crouch and guarded reaction](TICKET_FEAR.md) | Planted animation accepted; normal physical selection and retarget passed |
 | Surprise | [Surprise rise and freeze](TICKET_SURPRISE.md) | Planned |
-| Anger | [Anger controlled front-paw stomps](TICKET_ANGER.md) | Gesture accepted; persistent contact-miss recovery deployed, live revalidation pending |
+| Anger | [Anger controlled front-paw stomps](TICKET_ANGER.md) | Previous gesture accepted; stronger planted-glare revision offline-only, physical validation pending |
 
 All tickets inherit the [shared transition rule](#non-negotiable-transition-rule):
 finish any limb recovery, return to canonical stand over 1.5 seconds, hold exact

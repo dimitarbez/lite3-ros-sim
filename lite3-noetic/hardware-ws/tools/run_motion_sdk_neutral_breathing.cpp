@@ -1437,23 +1437,63 @@ AngerRunResult RunAngerStompTest(
             << " landing_dwell_s=" << kAngerLandingDwellSeconds
             << std::endl;
 
+  // The added expression is planted and finishes at exact canonical stand.
+  // Never start the accepted lift sequence if its reset fails to restore all
+  // four estimated supports; do not weaken any paw unload/landing threshold.
   bool okay = RunPawLiftSegment(
-      "anger_brace", first_leg, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-      0.0, kDiagonalSupportZ, kAngerBraceSeconds,
-      sender, receiver, robot_state, command, pause_stats, monitor,
-      stop_source, status, status_writer,
-      0.0, kAngerBraceMeters, 0.0, kAngerStanceMeters,
-      observe_request);
+      "anger_planted_glare_sink", first_leg, 0.0, 0.0,
+      0.0, kAngerDisplayForwardXMeters, 0.0, 0.0,
+      0.0, kDiagonalSupportZ,
+      kAngerDisplaySinkSeconds, sender, receiver, robot_state, command,
+      pause_stats, monitor, stop_source, status, status_writer,
+      0.0, 0.0, 0.0, kAngerDisplayStanceMeters, observe_request,
+      0.0, kAngerDisplayFrontDropMeters);
+  if (okay) {
+    okay = RunPawLiftSegment(
+        "anger_planted_glare_hold", first_leg, 0.0, 0.0,
+        kAngerDisplayForwardXMeters, kAngerDisplayForwardXMeters,
+        0.0, 0.0, 0.0, kDiagonalSupportZ,
+        kAngerDisplayHoldSeconds, sender, receiver, robot_state, command,
+        pause_stats, monitor, stop_source, status, status_writer,
+        0.0, 0.0, kAngerDisplayStanceMeters,
+        kAngerDisplayStanceMeters, observe_request,
+        kAngerDisplayFrontDropMeters, kAngerDisplayFrontDropMeters);
+  }
+  if (okay) {
+    okay = RunPawLiftSegment(
+        "anger_planted_glare_reset", first_leg, 0.0, 0.0,
+        kAngerDisplayForwardXMeters, 0.0, 0.0, 0.0,
+        0.0, kDiagonalSupportZ,
+        kAngerDisplayResetSeconds, sender, receiver, robot_state, command,
+        pause_stats, monitor, stop_source, status, status_writer,
+        0.0, 0.0, kAngerDisplayStanceMeters, 0.0, observe_request,
+        kAngerDisplayFrontDropMeters, 0.0);
+  }
+  if (okay && monitor->support_count() != 4) {
+    status->last_fault = "anger planted glare did not restore four-foot support";
+    okay = false;
+  }
+  bool braced = false;
+  if (okay && (!chat_runtime || retarget_tracker->may_start_next_stomp())) {
+    okay = RunPawLiftSegment(
+        "anger_brace", first_leg, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, kDiagonalSupportZ, kAngerBraceSeconds,
+        sender, receiver, robot_state, command, pause_stats, monitor,
+        stop_source, status, status_writer,
+        0.0, kAngerBraceMeters, 0.0, kAngerStanceMeters,
+        observe_request);
+    braced = okay;
+  }
 
   const int stomp_count = alternating_suite ? 2 : 1;
   bool gate_failure = false;
   bool recovered_contact_miss = false;
   double current_shift_x = 0.0;
   double current_shift_y = 0.0;
-  double current_common_z = okay ? kAngerBraceMeters : 0.0;
-  double current_stance_y = okay ? kAngerStanceMeters : 0.0;
+  double current_common_z = braced ? kAngerBraceMeters : 0.0;
+  double current_stance_y = braced ? kAngerStanceMeters : 0.0;
   AngerStompGate stomp_gate;
-  for (int stomp = 0; okay && stomp < stomp_count; ++stomp) {
+  for (int stomp = 0; okay && braced && stomp < stomp_count; ++stomp) {
     if (chat_runtime && !retarget_tracker->may_start_next_stomp()) break;
     if (!stomp_gate.BeginStomp()) {
       status->last_fault = "anger second stomp blocked before landing dwell";

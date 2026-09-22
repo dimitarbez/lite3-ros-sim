@@ -1,4 +1,9 @@
 #include <array>
+// The hardware offline gate builds Release; keep this test's safety assertions
+// active even when the compiler sets NDEBUG.
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
 #include <cassert>
 #include <cmath>
 
@@ -87,6 +92,61 @@ void CheckRelatch(int target_leg, double start_x, double start_y) {
     }
   }
 }
+
+void CheckPlantedGlare(int target_leg) {
+  for (int phase = 0; phase < 2; ++phase) {
+    const double duration = phase == 0 ? kAngerDisplaySinkSeconds :
+        kAngerDisplayResetSeconds;
+    for (int millisecond = 0;
+         millisecond <= static_cast<int>(duration * 1000.0);
+         ++millisecond) {
+      const double elapsed = millisecond / 1000.0;
+      const BreathScalar front = QuinticBreathSegment(
+          elapsed, duration,
+          phase == 0 ? 0.0 : kAngerDisplayFrontDropMeters,
+          phase == 0 ? kAngerDisplayFrontDropMeters : 0.0);
+      const BreathScalar forward = QuinticBreathSegment(
+          elapsed, duration,
+          phase == 0 ? 0.0 : kAngerDisplayForwardXMeters,
+          phase == 0 ? kAngerDisplayForwardXMeters : 0.0);
+      const BreathScalar stance = QuinticBreathSegment(
+          elapsed, duration,
+          phase == 0 ? 0.0 : kAngerDisplayStanceMeters,
+          phase == 0 ? kAngerDisplayStanceMeters : 0.0);
+      assert(std::isfinite(front.position));
+      assert(std::abs(front.velocity) <= kAngerDisplayMaximumSpeedMps);
+      assert(forward.position <= 0.0);
+      assert(std::abs(forward.velocity) <= kAngerDisplayMaximumSpeedMps);
+      for (int leg = 0; leg < 4; ++leg) {
+        const double sign = (leg == 0 || leg == 2) ? -1.0 : 1.0;
+        const bool front_leg = leg < 2;
+        const CartesianLegJointTarget target = SampleLite3CartesianLeg(
+            0.0, kStandHipY, kStandKnee, leg, forward.position,
+            sign * stance.position, front_leg ? front.position : 0.0,
+            forward.velocity, sign * stance.velocity,
+            front_leg ? front.velocity : 0.0);
+        assert(target.valid);
+        assert(std::abs(target.hip_x) <= 0.20);
+        assert(target.hip_y >= -1.20 && target.hip_y <= -0.30);
+        assert(target.knee >= 0.80 && target.knee <= 1.80);
+        assert(std::abs(target.hip_x_velocity) < 2.0);
+        assert(std::abs(target.hip_y_velocity) < 2.0);
+        assert(std::abs(target.knee_velocity) < 2.0);
+      }
+    }
+  }
+  // Quintic endpoints and the stationary hold match; the reset is the exact
+  // time-reverse and reaches canonical stand before the first paw can unload.
+  const BreathScalar reset = QuinticBreathSegment(
+      kAngerDisplayResetSeconds, kAngerDisplayResetSeconds,
+      kAngerDisplayFrontDropMeters, 0.0);
+  assert(reset.position == 0.0 && reset.velocity == 0.0);
+  const BreathScalar forward_reset = QuinticBreathSegment(
+      kAngerDisplayResetSeconds, kAngerDisplayResetSeconds,
+      kAngerDisplayForwardXMeters, 0.0);
+  assert(forward_reset.position == 0.0 && forward_reset.velocity == 0.0);
+  assert(target_leg == 0 || target_leg == 1);
+}
 }  // namespace
 
 int main() {
@@ -94,13 +154,17 @@ int main() {
                     kAngerPlaceSeconds,
                 "placement must include the complete landing dwell");
   assert(std::abs(kAngerLoopSeconds -
-      (kAngerBraceSeconds + 2.0 * (kAngerLiftSeconds +
+      (kAngerDisplaySinkSeconds + kAngerDisplayHoldSeconds +
+       kAngerDisplayResetSeconds + kAngerBraceSeconds +
+       2.0 * (kAngerLiftSeconds +
        kAngerPlaceSeconds + kAngerRelatchSeconds +
        kAngerRelatchHoldSeconds) + kAngerHoldSeconds +
        kAngerRecoverSeconds)) < 1e-12);
   assert(AngerStompLimitsValid(kAngerLiftMeters));
   assert(!AngerStompLimitsValid(0.009));
   assert(!AngerStompLimitsValid(0.036));
+  CheckPlantedGlare(0);
+  CheckPlantedGlare(1);
   assert(QuinticMaximumSpeed(kAngerLiftMeters, kAngerLowerSeconds) <=
          kAngerMaximumDownwardVelocityMps);
   assert(QuinticMaximumAcceleration(kAngerLiftMeters, kAngerLowerSeconds) <=

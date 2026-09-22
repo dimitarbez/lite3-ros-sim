@@ -238,11 +238,20 @@ separate calibration and lifted-paw movement plan.
 
 The Anger candidate is isolated behind explicit commissioning flags and is not
 part of the normal category allowlist. `HARDWARE_ANGER_SINGLE_STOMP_TEST=true`
-runs five seconds of accepted neutral breathing followed by one 35 mm
-front-paw controlled placement. `HARDWARE_ANGER_SUITE_TEST=true` runs the full
+runs five seconds of accepted neutral breathing followed by the new planted
+glare and one 35 mm front-paw controlled placement.
+`HARDWARE_ANGER_SUITE_TEST=true` runs the full
 left/right sequence, and `HARDWARE_ANGER_FIRST_PAW=left|right` selects its
-order. Each placement uses a 0.35-second quintic lowering and a 0.25-second
-stationary landing dwell. The commissioned implementation then returns shift,
+order. The 2026-09-22 development choreography adds a 1.10-second planted
+forward-body bias (20 mm negative body-frame X), 40 mm front-body sink, and
+10 mm stance widen, then a 0.35-second hold and 1.10-second exact-stand reset.
+The paw gestures remain 35 mm controlled placements. The previously accepted
+short rearward support shifts during paw unloading are unchanged; this is not
+walking or world-frame forward travel. Before lifting a paw it requires four
+restored estimated supports. This revised choreography has only offline validation, not physical
+acceptance; the deployed checksum and live results below refer to the earlier
+version. Each placement still uses a 0.35-second quintic lowering and a
+0.25-second stationary landing dwell. The commissioned implementation then returns shift,
 brace, and stance width to canonical stand over 1.0 second and holds it for
 0.35 seconds. The unchanged four-support gate is evaluated after that support
 reset, and the second placement cannot start before it passes. See

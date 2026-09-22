@@ -4,7 +4,20 @@
 [Reference: accepted joy machinery](TICKET_JOY_FRONT_PAW.md) ·
 [Previous: Surprise](TICKET_SURPRISE.md)
 
-## Status — gesture accepted; persistent contact-miss recovery deployed, live revalidation pending
+## Status — prior gesture accepted; forward-lean revision offline-only
+
+The 2026-09-22 development checkout adds an **uncommissioned** planted,
+forward-leaning glare before the previously accepted paw sequence: over
+1.10 s the body-frame foot targets shift 20 mm toward negative X (forward
+body bias), the front targets move 40 mm in Z, and the stance widens 10 mm.
+After a 0.35 s hold it returns to exact stand over 1.10 s. All four feet
+remain commanded planted; the existing 35 mm paw lift, touchdown
+speed/acceleration, landing dwell,
+canonical between-paw reset, support thresholds, and ownership gates are
+unchanged. Four estimated supports must be restored after the new display
+before the accepted brace or either paw lift can begin. This changed full
+profile has **no physical observation or operator acceptance** yet: earlier
+acceptance and deployed checksums below describe the previous choreography.
 
 The controlled placement state machine, normal chat selection, newest-request
 retargeting, bounds, contact gates, and offline tests are implemented. The
@@ -37,24 +50,26 @@ the body, transfer support, lift one paw, place it firmly under a bounded
 trajectory, recover contact, then mirror the other paw. It must be heavier and
 more deliberate than joy, without becoming a jump, gait, kick, or torque strike.
 
-## Canonical-reset 7.7-second candidate loop
+## Canonical-reset 10.25-second development loop
 
 Initial targets, subject to offline bounds and physical commissioning:
 
-1. **Brace — 0.55 s:** lower into a broad four-foot stance and bias load rearward.
-2. **First transfer/lift — 0.65 s:** transfer away and lift the first front paw
+1. **Planted glare — 2.55 s:** lean the body forward, sink the forebody, and
+   widen the stance; hold, return to exact stand, and require four supports.
+2. **Brace — 0.55 s:** lower into a broad four-foot stance without X travel.
+3. **First transfer/lift — 0.65 s:** transfer away and lift the first front paw
    approximately 35–50 mm.
-3. **First controlled place — 0.60 s:** lower with bounded vertical speed and
+4. **First controlled place — 0.60 s:** lower with bounded vertical speed and
    dwell 0.25 s without further downward drive.
-4. **First support reset — 1.35 s:** keep the paw down, return every Cartesian
+5. **First support reset — 1.35 s:** keep the paw down, return every Cartesian
    offset to canonical stand over 1.0 s, hold for 0.35 s, then require all four
    support latches.
-5. **Second transfer/lift — 0.65 s:** mirror only after four-foot support is
+6. **Second transfer/lift — 0.65 s:** mirror only after four-foot support is
    restored.
-6. **Second controlled place/reset — 1.95 s:** lower, dwell, return to canonical
+7. **Second controlled place/reset — 1.95 s:** lower, dwell, return to canonical
    stand, hold, and confirm all four supports again.
-7. **Hold — 0.65 s:** maintain a low assertive four-foot pose.
-8. **Recover — 1.30 s:** return to the neutral entrance pose.
+8. **Hold — 0.65 s:** maintain a low assertive four-foot pose.
+9. **Recover — 1.30 s:** return to the neutral entrance pose.
 
 Exact phase timing may change after measured touchdown review, but total cadence
 must remain slower and heavier than joy's 2.5-second-per-paw cycle.
@@ -72,6 +87,9 @@ must remain slower and heavier than joy's 2.5-second-per-paw cycle.
   space.
 - Keep planar motion, yaw, gait/action, torque feed-forward, and external wrench
   commands zero.
+- The planted negative-X display is a body-frame posture target, not walking
+  or a world-frame translation. The previously accepted short rearward support
+  transfers during single-paw unload remain necessary and unchanged.
 
 ## Transition behavior
 
@@ -92,6 +110,9 @@ hold/release behavior.
 - [x] Prove the second stomp cannot begin without confirmed landing and dwell.
 - [x] Test retargeting during both raised-paw and placement phases offline.
 - [x] Wire validated `anger` state through exact neutral behind the allowlist.
+- [x] Add the planted forebody display with a four-support gate before paw lift.
+- [ ] Physically revalidate the revised full profile and obtain a new visual
+  verdict before treating this choreography as accepted or deploying it.
 - [x] Pass the complete local offline gate, including full-runner compilation.
 - [x] Compile the first hardened runner against the robot's actual aarch64
   MotionSDK and pass all seven suites.
